@@ -141,6 +141,7 @@ def train(data_source):
     model.train()
     #p = mp.Pool(mp.cpu_count())
     for batch, i in enumerate(range(0, train_d.size(0) - 1, seq_len)):
+        print('batch', batch)
         data_word, targets = get_batch(data_source, i, seq_len) # data word : sentence length x batch size 
         data_char = get_char_input(data_word, corpus.dictionary,device,eow, word_length) # data char (each word in one column): max word length x (seq_len*batchsize) 
         model.zero_grad()
