@@ -2,7 +2,7 @@
 
 title = "CONFIG CharLSTMLM"
 
-path = '/home/cluster/evhuber/data/Surprisal_LMs/data/wiki_splits_shortened'
+path = '/home/cluster/evhuber/data/wiki_dummy_test'
 model_dir = 'try_run/models'
 log_path = 'try_run/logger'
 nr_epochs = 10

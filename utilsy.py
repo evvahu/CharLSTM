@@ -10,7 +10,7 @@ import torch
 import numpy as np
 import utils_data
 
-def batchify(data, bsz, cuda):
+def batchify(data, bsz):#, cuda):
     # Work out how cleanly we can divide the dataset into bsz parts.
     
     nbatch = data.size(0) // bsz
@@ -18,8 +18,8 @@ def batchify(data, bsz, cuda):
     data = data.narrow(0, 0, nbatch * bsz)
     # Evenly divide the data across the bsz batches.
     data = data.view(bsz, -1).t().contiguous()
-    if cuda:
-        data = data.cuda()
+    #if cuda:
+    #    data = data.cuda()
     return data
 
 def repackage_hidden(h):
@@ -58,10 +58,10 @@ def char_repr(word, chardict, max_l, eow):
     return wchar
 
 
-def get_char_input(input, dictionary, device, eow, max_l=10):
+def get_char_input(input, dictionary, eow, max_l=10):
     
     #print(input)
-    char_mat = torch.empty(max_l+1,input.shape[1]*input.shape[0], dtype=int, device=device)
+    char_mat = torch.empty(max_l+1,input.shape[1]*input.shape[0], dtype=int)
     input = input.T.flatten(0)
     #char_mat = torch.empty(input.shape[0], max_l+1, dtype=int, device=device) #one word in each column
     for i, word in enumerate(input):

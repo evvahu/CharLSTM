@@ -32,30 +32,36 @@ print('finished with loading corpus')
 seq_len = config['seq_len']
 l_r = config['l_r']
 word_length = config['word_length']
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print('device:', device)
-gpu = False
+#device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+#print('device:', device)
+#gpu = False
 if torch.cuda.is_available():
     gpu = True
 #cpu_count = 6
 #if mp.cpu_count() < cpu_count:
 #    cpu_count = mp.cpu_count()
-train_d = batchify(corpus.train, config['bs'], gpu)
-test_d = batchify(corpus.test, config['bs'], gpu)
-val_d = batchify(corpus.valid,config['bs'], gpu)
+train_d = batchify(corpus.train, config['bs'])#, gpu)
+test_d = batchify(corpus.test, config['bs'])#, gpu)
+val_d = batchify(corpus.valid,config['bs'])#, gpu)
 print(train_d.size())
 params_char = [len(corpus.dictionary.idx2char), config['charmodel']['embedding_size'],  config['charmodel']['hidden_size'], config['charmodel']['dropout'], config['charmodel']['nlayers'], 'LSTM'] #(self, tokensize, ninp, nhid, dropout, nlayers=1, rnn_type='LSTM'):
 print('corpus dict', corpus.dictionary.idx2char[0])
 print(corpus.dictionary.char2idx)
 print(corpus.dictionary.idx2char)
-model = Encoder(config['wordmodel']['dropout'], config['wordmodel']['embedding_size'], config['wordmodel']['hidden_size'], config['wordmodel']['nlayers'], len(corpus.dictionary.idx2word),device, params_char )
-generator = CharGenerator(config['wordmodel']['hidden_size'], config['generator']['embedding_size'],len(corpus.dictionary.idx2char),  config['generator']['hidden_size'], config['generator']['nlayers'], config['generator']['dropout'], device)
+model = Encoder(config['wordmodel']['dropout'], config['wordmodel']['embedding_size'], config['wordmodel']['hidden_size'], config['wordmodel']['nlayers'], len(corpus.dictionary.idx2word), params_char )
+generator = CharGenerator(config['wordmodel']['hidden_size'], config['generator']['embedding_size'],len(corpus.dictionary.idx2char),  config['generator']['hidden_size'], config['generator']['nlayers'], config['generator']['dropout'])
 #generator = CharGenerator(100, 100,, 100, 1, 0.1, device) # hl_size, emb_size, nchar, nhid, nlayers, dropout, rnn_type = 'LSTM'
-if gpu:
-    model.cuda()
-    generator.cuda()
+if torch.cuda.device_count() > 1:
+    model = torch.nn.DataParallel(model)
+    generator = torch.nn.DataParallel(generator)
+
+
+
+#if gpu:
+ #   model.cuda()
+  #  generator.cuda()
 softmax = torch.nn.Softmax(dim=1)
-criterion = torch.nn.CrossEntropyLoss()
+
 optimizer = torch.optim.Adam(model.parameters(), lr = l_r)
 lr = config['l_r']
 eval_batch_size = config['bs']
@@ -74,7 +80,7 @@ def evaluate(data_source):
     with torch.no_grad():
         for i in range(0, data_source.size(0) - 1, seq_len):
             data_word, targets = get_batch(data_source, i, seq_len)
-            data_char = get_char_input(data_word, corpus.dictionary,device, word_length) 
+            data_char = get_char_input(data_word, corpus.dictionary, word_length) 
             hidden_state = repackage_hidden(hidden_state)
             id_char = 0
             beginning_char = 0 
@@ -96,7 +102,7 @@ def evaluate(data_source):
                     word_l = lengths[word_nr]
                     b = hidden_state[0][:, word_nr]
                     t = data_char_target_word[:, word_nr]
-                    l, probs, _ = generate_word(b, hidden_generator, t, eow, word_l, device=device) #change word leng
+                    l, probs, _ = generate_word(b, hidden_generator, t, eow, word_l) #change word leng
                     w_loss += l
                 #id_char = id_char + bs
                 seq_loss += w_loss * config['bs']
@@ -108,8 +114,8 @@ def evaluate(data_source):
     return eval_loss/data_source.size(0), probs
 
 
-def generate_word(hidden_state, hidden_generator, target, last_idx, word_l, device = device):
-    last_char = torch.tensor(corpus.dictionary.char2idx['<bow>'], device=device)
+def generate_word(hidden_state, hidden_generator, target, last_idx, word_l,device):
+    last_char = torch.tensor(corpus.dictionary.char2idx['<bow>'])
     probs_of_word = []
     word_loss = 0
     if word_l > len(target):
@@ -117,12 +123,14 @@ def generate_word(hidden_state, hidden_generator, target, last_idx, word_l, devi
     word_str = ''
     target_str = ''
     for i in range(word_l):
-        out, hidden_generator = generator(last_char, hidden_state, hidden_generator)
+        out, hidden_generator = generator(last_char, hidden_state, hidden_generator,device)
         #target = target[i].unsqueeze(0)
         t = target[i].unsqueeze(0)
+        t = t.to(device)
         target_str += corpus.dictionary.idx2char[t]
         out = out.view(1,-1)
-        l = criterion(out, t)
+        criterion = torch.nn.CrossEntropyLoss().cuda()
+        l = criterion(out, t)#.to(device)
         word_loss += l
         last_char = softmax(out)
         probs_of_word.append(torch.max(last_char, dim=1).values.item())
@@ -141,13 +149,20 @@ def train(data_source):
     model.train()
     #p = mp.Pool(mp.cpu_count())
     for batch, i in enumerate(range(0, train_d.size(0) - 1, seq_len)):
+        print(torch.cuda.current_device())
+        if torch.cuda.is_available():
+            device = torch.cuda.current_device()
+            device = 'cuda:{}'.format(device)
+        else:
+            device = 'cpu'
+        print('CURRENT DEVICE: {}'.format(device))
         data_word, targets = get_batch(data_source, i, seq_len) # data word : sentence length x batch size 
-        data_char = get_char_input(data_word, corpus.dictionary,device,eow, word_length) # data char (each word in one column): max word length x (seq_len*batchsize) 
+        data_char = get_char_input(data_word, corpus.dictionary,eow, word_length) # data char (each word in one column): max word length x (seq_len*batchsize) 
         model.zero_grad()
         #initialise hidden states, hidden_state tuple of hidden state and cell sttate 
-        hidden_state = model.init_hidden(config['bs'])
-        hidden_char = model.charEncoder.init_hidden(config['bs'])
-        hidden_generator = generator.init_hidden(1) # only one word at a time 
+        hidden_state = [h.to(device) for h in model.init_hidden(config['bs'])]
+        hidden_char = [h.to(device) for h in model.charEncoder.init_hidden(config['bs'])]
+        hidden_generator = [h.to(device) for h in generator.init_hidden(1)] # only one word at a time 
         beginning_char = 0 
         end_char = config['bs']
         seq_loss = 0
@@ -157,7 +172,7 @@ def train(data_source):
             data_char_target_word = data_char[:,end_char:end_char+config['bs']] # get batch size big blocks of chars (for word at position *id + 1*)
             #print('data char shape: for input and target', data_char_part.shape, data_char_target_word.shape)
             #print('word shape: it should be bs * 1', data_word[id].shape)
-            output, hidden_state, hidden_char = model(data_word[id], data_char_part, hidden_state, hidden_char) #out: sequence length, batch size, out_size,  hi[0] contains final hidden state for each element in batch 
+            output, hidden_state, hidden_char = model(data_word[id], data_char_part, hidden_state, hidden_char, device) #out: sequence length, batch size, out_size,  hi[0] contains final hidden state for each element in batch 
             # hidden_state size: 1,6,100 batch size * hidden size 
             lengths = [len(corpus.dictionary.idx2word[ix])+1 for ix in data_word[id+1]]
             loss = 0
@@ -170,7 +185,7 @@ def train(data_source):
                 t = data_char_target_word[:, word_nr] # t is of size word_length, padded with 0s at the moment
                 stringy = [corpus.dictionary.idx2char[ti] for ti in t]
                 # words contain <eow> token at the end of word (final char)
-                l, _,_ = generate_word(hs, hidden_generator, t, eow,wl, device=device)
+                l, _,_ = generate_word(hs, hidden_generator, t, eow,wl, device)
                 loss += l
 
 
