@@ -82,35 +82,42 @@ class Dictionary(object):
 class Corpus(object):
     def __init__(self, path):
         self.dictionary = Dictionary(path)
-        self.train = self.tokenize(self.dictionary, os.path.join(path, 'train.txt'))
-        self.valid = self.tokenize(self.dictionary, os.path.join(path, 'valid.txt'))
-        self.test = self.tokenize(self.dictionary, os.path.join(path, 'test.txt'))
+        print('finished')
+        self.train = tokenize(self.dictionary, os.path.join(path, 'train.txt'))
+        print('finished loading train')
+        self.valid = tokenize(self.dictionary, os.path.join(path, 'valid.txt'))
+        self.test = tokenize(self.dictionary, os.path.join(path, 'test.txt'))
         print('finished tokenising all data files')
 
 
-    def tokenize(self, dictionary, path):
-        """Tokenizes a text file for training or testing to a sequence of indices format
-        We assume that training and test data has <eos> symbols """
-        assert os.path.exists(path)
-        with open(path, 'r', encoding="utf8") as f:
-            ntokens = 0
-            for line in f:
-                words = line.split()
-                ntokens += len(words)
+def tokenize(dictionary, path):
+    """Tokenizes a text file for training or testing to a sequence of indices format
+       We assume that training and test data has <eos> symbols """
+    assert os.path.exists(path)
+    nr_lines = 0
+    with open(path, 'r', encoding="utf8") as f:
+        ntokens = 0
+        for line in f:
+            nr_lines +=1
+            words = line.split()
+            ntokens += len(words)
 
-        # Tokenize file content
-        with open(path, 'r', encoding="utf8") as f:
-            ids = torch.LongTensor(ntokens)
-            token = 0
-            for line in f:
-                words = line.split()
-                for word in words:
-                    if word in dictionary.word2idx:
-                        ids[token] = dictionary.word2idx[word]
-                    else:
-                        ids[token] = dictionary.word2idx["<unk>"]
-                    token += 1
+    # Tokenize file content
+    with open(path, 'r', encoding="utf8") as f:
+        ids = torch.LongTensor(ntokens)
+        token = 0
+        for line in tqdm(f, total=nr_lines):
+        #for line in f:
+            line = line.strip()
+            if not line: continue
+            words = line.split()
+            for word in words:
+                if word in dictionary.word2idx:
+                    ids[token] = dictionary.word2idx[word]
+                else:
+                    ids[token] = dictionary.word2idx["<unk>"]
+                token += 1
 
-        return ids
+    return ids
 
     

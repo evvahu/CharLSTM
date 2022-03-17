@@ -24,6 +24,8 @@ except:
     print('dict already exists')
 model_path_lstm = os.path.join(config['model_dir'], 'lstmmain')
 model_path_generator = os.path.join(config['model_dir'], 'generator')
+logging.info('model paths: {}, {}'.format(model_path_generator, model_path_lstm))
+logging.info('start loading corpus')
 corpus = Corpus(config['path'])
 print('finished with loading corpus')
 
@@ -177,6 +179,7 @@ def train(data_source):
             end_char = beginning_char + config['bs']
             seq_loss += (loss *config['bs'])
         seq_loss = seq_loss/seq_len
+        print('batch loss', seq_loss)
         #print(seq_loss)
         #print('loss after batch {}: {}'.format(batch, seq_loss))
         seq_loss.backward()
@@ -209,8 +212,10 @@ except KeyboardInterrupt:
     logging.info('-' * 89)
     logging.info('Exiting from training early')
 # Load the best saved model.
-with open(args.save, 'rb') as f:
+with open(model_path_lstm, 'rb') as f:
     model = torch.load(f)
+with open(model_path_generator, 'rb') as f:
+    generator = torch.load(f)
 # Run on test data.
 test_loss, probs = evaluate(test_d)
 logging.info('*' * 89)
