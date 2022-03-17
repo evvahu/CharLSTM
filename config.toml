@@ -1,0 +1,32 @@
+# This is a TOML document.
+
+title = "CONFIG CharLSTMLM"
+
+path = '/home/cluster/evhuber/data/Surprisal_LMs/data/wiki_splits_shortened'
+model_dir = 'try_run/models'
+log_path = 'try_run/logger'
+nr_epochs = 10
+bs = 34
+seq_len = 15
+word_length = 12
+
+l_r = 0.1
+
+[wordmodel]
+embedding_size = 300
+hidden_size = 200
+nlayers = 2
+dropout = 0.1
+
+[charmodel]
+embedding_size = 100
+hidden_size = 100
+dropout = 0.1
+nlayers = 1
+
+[generator]
+
+embedding_size = 100
+hidden_size = 100
+nlayers = 2
+dropout = 0.1

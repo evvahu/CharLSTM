@@ -37,29 +37,37 @@ def get_batch(source, i, seq_length):
     target = source[i+1:i+1+seq_len].view(-1)
     return data, target
 
-def char_repr(word, chardict, max_l):
-    wchar = torch.zeros(max_l+1)
-    eow = '<eow>'
+def char_repr(word, chardict, max_l, eow):
+    wchar = torch.zeros(max_l+1, dtype=int)
+    #eow = '<eow>'
     for i, ch in enumerate(word):
         ch = ch.lower()
-        if i > max_l:
+        if i+1 > max_l:
+            #print('s1')
+            wchar[i] = eow
             return wchar
+
         wchar[i] = chardict[ch]
-    if i == max_l:
-        return wchar
-    else:
-        wchar[i+1] = chardict[eow]
-        return wchar
+    #if i+1 == max_l:
+     #   print('s2')
+      #  wchar[i+1] = chardict[eow]
+       # return wchar, length
+    #else:
+    #print('s3')
+    wchar[i+1] = eow
+    return wchar
 
 
-def get_char_input(input, worddict, chardict, device, max_l=10):
-    input = torch.flatten(input)
-    char_mat = torch.empty(input.shape[0], max_l+1, dtype=int, device=device) #one word in each column
+def get_char_input(input, dictionary, device, eow, max_l=10):
+    
+    #print(input)
+    char_mat = torch.empty(max_l+1,input.shape[1]*input.shape[0], dtype=int, device=device)
+    input = input.T.flatten(0)
+    #char_mat = torch.empty(input.shape[0], max_l+1, dtype=int, device=device) #one word in each column
     for i, word in enumerate(input):
-        char_word = char_repr(worddict[word], chardict, max_l)
-        char_mat[i] = char_word
-    return char_mat.T
+        #print(worddict[word])
+        char_word = char_repr(dictionary.idx2word[word], dictionary.char2idx, max_l, eow)
+        char_mat[:, i] = char_word
+    return char_mat
 
-def encode_sentence(sentence, worddict):
-    torch.empty 
 

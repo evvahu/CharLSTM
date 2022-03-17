@@ -12,41 +12,64 @@ import argparse
 import logging
 from collections import defaultdict
 from random import shuffle
-import data_utils
+import os
+import gzip
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--input', type=str, help='Input file path')
-parser.add_argument('--output', type=str, help='Output file path')
-parser.add_argument('--output_dir', type=str, help='Output path for training/valid/test sets')
-parser.add_argument('--vocab', type=int, default=10000, help="The size of vocabulary, default = 10K")
+#parser = argparse.ArgumentParser()
+#parser.add_argument('--input', type=str, help='Input file path')
+#parser.add_argument('--output', type=str, help='Output file path')
+#parser.add_argument('--output_dir', type=str, help='Output path for training/valid/test sets')
+#parser.add_argument('--vocab', type=int, default=10000, help="The size of vocabulary, default = 10K")
 
-args = parser.parse_args()
-logging.basicConfig(level=logging.INFO)
+#args = parser.parse_args()
+#logging.basicConfig(level=logging.INFO)
+
+
+def read_gzip_stream(path):
+    with gzip.open(path, 'rt', encoding="UTF-8") as f:
+        for line in f:
+            yield line
+
+def read_text_stream(path):
+    for f in os.listdir(path):
+        f_path = os.path.join(path, f)
+        with open(f_path, 'r', encoding="UTF-8") as f:
+            for line in f:
+                yield line
+def read_file(path):
+    if path.endswith(".gz"):
+        logging.info("Reading GZIP file")
+        return read_gzip_stream(path)
+    else:
+        return read_text_stream(path)
 
 
 def create_vocab(path, vocab_size):
     counter = defaultdict(int)
-    for line in data_utils.read(path):
+    for line in read_file(path):
         for word in line.replace("\n"," <eos>").split():
             counter[word] += 1
 
-    count_pairs = sorted(counter.items(), key=lambda x: (-x[1], x[0]))
+    count_pairs = sorted(counter.items(), key=lambda x: (-x[1], x[0]))[:vocab_size]
     words = [w for (w, v) in count_pairs]
-    #print(len(count_pairs))
-    #print(len(counter), count_pairs[vocab_size - 1])
+    print(len(count_pairs))
+    print(len(counter), count_pairs[vocab_size - 1])
     w2idx = dict(zip(words, range(len(words))))
     idx2w = dict(zip(range(len(words)), words))
     return w2idx, idx2w
 
 def convert_text(input_path, output_path, vocab):
     with open(output_path, 'w') as output:
-        for line in data_utils.read(input_path):
+        for line in read_file(input_path):
             words = [filter_word(word, vocab) for word in line.replace("\n", " <eos>").split()]
             output.write(" ".join(words) + "\n")
         output.close()
 
-def convert_line(line, vocab):
-    return [filter_word(word, vocab) for word in line.replace("\n", " <eos>").split()]
+def convert_line(line, vocab, oov = False):
+    if oov:
+        return [filter_word(word, vocab) for word in line.replace("\n", " <eos>").split()]
+    else:
+        return[word for word in line.replace("\n", "<eos>").split()]
 
 def word_to_idx(word, vocab):
     if word in vocab:
@@ -60,7 +83,7 @@ def filter_word(word, vocab):
     else:
         return "<unk>"
 
-def create_corpus(input_path, output_path, vocab):
+def create_corpus(input_path, output_path, vocab=dict(), oov=False):
     """ Split data to create training, validation and test corpus """
     nlines = 0
     f_train = open(output_path + "/train.txt", 'w')
@@ -69,13 +92,13 @@ def create_corpus(input_path, output_path, vocab):
 
     train = []
 
-    for line in data_utils.read(input_path):
+    for line in read_file(input_path):
         if nlines % 10 == 0:
-            f_valid.write(" ".join(convert_line(line, vocab)) + "\n")
+            f_valid.write(" ".join(convert_line(line, vocab, oov)) + "\n")
         elif nlines % 10 == 1:
-            f_test.write(" ".join(convert_line(line, vocab)) + "\n")
+            f_test.write(" ".join(convert_line(line, vocab, oov)) + "\n")
         else:
-            train.append(" ".join(convert_line(line, vocab)) + "\n")
+            train.append(" ".join(convert_line(line, vocab, oov)) + "\n")
         nlines += 1
 
     shuffle(train)
@@ -85,9 +108,16 @@ def create_corpus(input_path, output_path, vocab):
     f_valid.close()
     f_test.close()
 
-
-w2idx, idx2w = create_vocab(args.input, args.vocab)
-
-convert_text(args.input, args.output, w2idx)
-create_corpus(args.input, args.output_dir, w2idx)
+if __name__ == '__main__':
+    input = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki/wiki-all-shuf'
+    vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk/vocab.txt'
+    output = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk/output.txt'
+    output_dir = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk'
+    oov = True
+    if oov:
+        w2idx, idx2w = create_vocab(input, 50000)
+        convert_text(input, output, w2idx)
+        create_corpus(input, output_dir, w2idx)
+    else:
+        create_corpus(input, output_dir)
 

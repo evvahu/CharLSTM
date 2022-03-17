@@ -26,6 +26,7 @@ class Dictionary(object):
         try:
             vocab = open(vocab_path, encoding="utf8").read()
             self.word2idx = {w: i for i, w in enumerate(vocab.split())}
+            self.add_word('<unk>')
             self.idx2word = [w for w in vocab.split()]
             self.vocab_file_exists = True
         except FileNotFoundError:
@@ -56,7 +57,7 @@ class Dictionary(object):
 
     def get_char_dict(self):
         char2idx = dict()
-        idx2char = []
+        idx2char = ['*PAD*']
         i = 1
         max_l = 0
         for w in self.idx2word:
@@ -84,7 +85,7 @@ class Corpus(object):
         self.train = self.tokenize(self.dictionary, os.path.join(path, 'train.txt'))
         self.valid = self.tokenize(self.dictionary, os.path.join(path, 'valid.txt'))
         self.test = self.tokenize(self.dictionary, os.path.join(path, 'test.txt'))
-
+        print('finished tokenising all data files')
 
 
     def tokenize(self, dictionary, path):
