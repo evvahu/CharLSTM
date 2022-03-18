@@ -55,7 +55,7 @@ if torch.cuda.device_count() > 1:
     model = torch.nn.DataParallel(model)
     generator = torch.nn.DataParallel(generator)
 
-
+print('DEVICE COUNT', torch.cuda.device_count())
 
 #if gpu:
  #   model.cuda()
@@ -73,9 +73,15 @@ print(eow)
 
 def evaluate(data_source):
     model.eval()
-    hidden_state = model.init_hidden(eval_batch_size)
-    hidden_char = model.charEncoder.init_hidden(eval_batch_size) # bs 
-    hidden_generator = generator.init_hidden(1)
+    if torch.cuda.is_available():
+        device = torch.cuda.current_device()
+        device = 'cuda:{}'.format(device)
+    else:
+        device = 'cpu'
+    hidden_state = [h.to(device) for h in model.init_hidden(eval_batch_size)]
+    hidden_char = [h.to(device) for h in model.charEncoder.init_hidden(eval_batch_size)]
+    hidden_generator = [h.to(device) for h in generator.init_hidden(1)]
+
     eval_loss = 0
     with torch.no_grad():
         for i in range(0, data_source.size(0) - 1, seq_len):
@@ -97,12 +103,12 @@ def evaluate(data_source):
                 #print(data_char_part)
                 #last_char = torch.tensor(corpus.dictionary.char2idx['<bow>'], device=device).repeat(bs)
                 # send in each word individually so that we can retrieve hidden state at each word 
-                out, hidden_state, hidden_char = model(data_word[id], data_char_part, hidden_state, hidden_char) 
+                out, hidden_state, hidden_char = model(data_word[id], data_char_part, hidden_state, hidden_char,device) 
                 for word_nr in range(0, hidden_state[0].shape[1]):
                     word_l = lengths[word_nr]
                     b = hidden_state[0][:, word_nr]
                     t = data_char_target_word[:, word_nr]
-                    l, probs, _ = generate_word(b, hidden_generator, t, eow, word_l) #change word leng
+                    l, probs, _ = generate_word(b, hidden_generator, t, eow, word_l,device) #change word leng
                     w_loss += l
                 #id_char = id_char + bs
                 seq_loss += w_loss * config['bs']
