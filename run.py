@@ -178,8 +178,8 @@ def train(data_source):
             # @TODO: one could include a word level predictor here 
             beginning_char = end_char
             end_char = beginning_char + config['bs']
-            seq_loss += (loss *config['bs'])
-        seq_loss = seq_loss/seq_len
+            seq_loss += loss
+        seq_loss = seq_loss/(seq_len*config['bs'])
         print('batch loss', seq_loss)
         #print(seq_loss)
         #print('loss after batch {}: {}'.format(batch, seq_loss))
