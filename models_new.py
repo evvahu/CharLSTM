@@ -143,18 +143,17 @@ class CharGenerator(nn.Module):
         self.drop = nn.Dropout(dropout)
         #self.softmax = nn.Softmax(dim=1)
         self.init_weights()
-    def forward(self, last_char, hidden_lstm, hidden):
+    def forward(self, input, hidden_lstm, hidden):
         """
         last_char: index of previously predicted character
         output: trained to predict the next char 
         """
         if self.device == 'cuda:0':
-            last_char = last_char.cuda()
+            input = input.cuda()
         #last_char.to_device(self.device)
-        last_char = self.encoder(last_char)
-        #print('in generator', last_char.shape, hidden_lstm.shape, torch.cat((last_char, hidden_lstm.squeeze()), 0))
+        input = self.encoder(input)
         hidden_lstm = hidden_lstm[0]
-        input_cat = torch.cat((last_char, hidden_lstm.squeeze()), 0)
+        input_cat = torch.cat((input, hidden_lstm.squeeze()), 0) # needs to be right dim
         input_cat = torch.unsqueeze(input_cat, 0).unsqueeze(0)
         input_cat = self.drop(input_cat)
         output, hidden = self.rnn(input_cat, hidden)

@@ -107,6 +107,14 @@ def evaluate(data_source):
            
     return eval_loss/data_source.size(0), probs
 
+def generate_word_bs(hidden_state, hidden_generator, target, last_idx, device=device):
+    # input: [BOW, 2,3,4,5,EOW, 0,0,0,0,0] 
+    # target [2,3,4,5,EOW, 0,0,0, additional_0]
+    # in generator: encode all chars (whole matrix), concatenate each char emb with hidden_state?, rnn: whole matrix
+    #                               decoder: nchar 
+    #last_char = torch.tensor(corpus.dictionary.char2idx['<bow>'], device=device)
+    out, hidden_generator = generator(input, hidden_state, hidden_generator)
+    target = []
 
 def generate_word(hidden_state, hidden_generator, target, last_idx, word_l, device = device):
     last_char = torch.tensor(corpus.dictionary.char2idx['<bow>'], device=device)
@@ -162,17 +170,17 @@ def train(data_source):
             # hidden_state size: 1,6,100 batch size * hidden size 
             lengths = [len(corpus.dictionary.idx2word[ix])+1 for ix in data_word[id+1]]
             loss = 0
-
+            generate_word_bs()
             # GENERATE NEXT WORD: loop over all words in batch (could already be done one step further up) and generate word at time point n+1 
             # one could parallelise the generation process (problem: don't want to detach it from current graph)
-            for word_nr in range(hidden_state[0].shape[1]):
-                wl = lengths[word_nr]
-                hs = hidden_state[0][:, word_nr] # 1 x hidden size 
-                t = data_char_target_word[:, word_nr] # t is of size word_length, padded with 0s at the moment
-                stringy = [corpus.dictionary.idx2char[ti] for ti in t]
-                # words contain <eow> token at the end of word (final char)
-                l, _,_ = generate_word(hs, hidden_generator, t, eow,wl, device=device)
-                loss += l
+            #for word_nr in range(hidden_state[0].shape[1]):
+            #    wl = lengths[word_nr]
+            #    hs = hidden_state[0][:, word_nr] # 1 x hidden size 
+            #    t = data_char_target_word[:, word_nr] # t is of size word_length, padded with 0s at the moment
+            #    stringy = [corpus.dictionary.idx2char[ti] for ti in t]
+            #    # words contain <eow> token at the end of word (final char)
+            #    l, _,_ = generate_word(hs, hidden_generator, t, eow,wl, device=device)
+            #    loss += l
 
 
             # @TODO: one could include a word level predictor here 
