@@ -152,9 +152,14 @@ class CharGenerator(nn.Module):
             input = input.cuda()
         #last_char.to_device(self.device)
         input = self.encoder(input)
-        hidden_lstm = hidden_lstm[0]
-        input_cat = torch.cat((input, hidden_lstm.squeeze()), 0) # needs to be right dim
-        input_cat = torch.unsqueeze(input_cat, 0).unsqueeze(0)
+        #print('input', input.shape)
+        hidden_lstm = hidden_lstm[0][0].unsqueeze(0)
+        hidden_lstm = hidden_lstm.expand(input.shape[0],-1,-1)
+        #print('hidden', hidden_lstm.shape)
+        input_cat = torch.cat((input, hidden_lstm), 2) # needs to be right dim
+        #print('cat input', input_cat.shape)
+        #input_cat = torch.unsqueeze(input_cat, 0).unsqueeze(0)
+        #print(input_cat.shape)
         input_cat = self.drop(input_cat)
         output, hidden = self.rnn(input_cat, hidden)
         output = self.drop(output)

@@ -66,55 +66,47 @@ print(eow)
 
 
 def evaluate(data_source):
-    model.eval()
-    hidden_state = model.init_hidden(eval_batch_size)
-    hidden_char = model.charEncoder.init_hidden(eval_batch_size) # bs 
-    hidden_generator = generator.init_hidden(1)
-    eval_loss = 0
+    avg_prob = []
+    avg_seq_loss = []
     with torch.no_grad():
-        for i in range(0, data_source.size(0) - 1, seq_len):
-            data_word, targets = get_batch(data_source, i, seq_len)
-            data_char = get_char_input(data_word, corpus.dictionary,device, word_length) 
-            hidden_state = repackage_hidden(hidden_state)
-            id_char = 0
+        for batch, i in enumerate(range(0, train_d.size(0) - 1, seq_len)):
+            data_word, targets = get_batch(data_source, i, seq_len) # data word : sentence length x batch size 
+            data_char = get_char_input(data_word, corpus.dictionary,device,eow, word_length) # data char (each word in one column): max word length x (seq_len*batchsize) 
+            #initialise hidden states, hidden_state tuple of hidden state and cell sttate 
+            hidden_state = model.init_hidden(config['bs'])
+            hidden_char = model.charEncoder.init_hidden(config['bs'])
+            hidden_generator = generator.init_hidden(config['bs']) # only one word at a time 
             beginning_char = 0 
             end_char = config['bs']
-            all_ws = 0
             seq_loss = 0
-            for id in range(data_word.shape[0]-1):
-                w_loss = 0
-                data_char_part = data_char[:,beginning_char:end_char]
-                data_char_target_word = data_char[:,end_char:end_char+config['bs']]
-                hidden_state = repackage_hidden(hidden_state)
-                hidden_char = repackage_hidden(hidden_char)
-                lengths = [len(corpus.dictionary.idx2word[ix])+1 for ix in data_word[id+1]]
-                #print(data_char_part)
-                #last_char = torch.tensor(corpus.dictionary.char2idx['<bow>'], device=device).repeat(bs)
-                # send in each word individually so that we can retrieve hidden state at each word 
-                out, hidden_state, hidden_char = model(data_word[id], data_char_part, hidden_state, hidden_char) 
-                for word_nr in range(0, hidden_state[0].shape[1]):
-                    word_l = lengths[word_nr]
-                    b = hidden_state[0][:, word_nr]
-                    t = data_char_target_word[:, word_nr]
-                    l, probs, _ = generate_word(b, hidden_generator, t, eow, word_l, device=device) #change word leng
-                    w_loss += l
-                #id_char = id_char + bs
-                seq_loss += w_loss * config['bs']
+            for id in range(data_word.shape[0]-1): # -1 because after final word no word to predict 
+                data_char_part = data_char[:,beginning_char:end_char] # get batch size big blocks of chars (for word at position *id*)
+                output, hidden_state, hidden_char = model(data_word[id], data_char_part, hidden_state, hidden_char) #out: sequence length, batch size, out_size,  hi[0] contains final hidden state for each element in batch 
+                word_loss, probs = generate_word_bs(hidden_state, data_char_part, hidden_generator, device)
+                avg_prob.append(torch.mean(probs).item())
+                seq_loss += word_loss
                 beginning_char = end_char
                 end_char = beginning_char + config['bs']
-            eval_loss += seq_loss/seq_len
-            
-           
-    return eval_loss/data_source.size(0), probs
+            avg_seq_loss.append((seq_loss*data_word.shape[0])/data_word.shape[1])
+            hidden_state = repackage_hidden(hidden_state)
+            hidden_char = repackage_hidden(hidden_char)
+            hidden_generator = repackage_hidden(hidden_generator)
+    
+    return np.mean(avg_seq_loss), np.mean(avg_prob)
 
-def generate_word_bs(hidden_state, hidden_generator, target, last_idx, device=device):
+def generate_word_bs(hidden_state, input, hidden_generator, device=device):
     # input: [BOW, 2,3,4,5,EOW, 0,0,0,0,0] 
     # target [2,3,4,5,EOW, 0,0,0, additional_0]
     # in generator: encode all chars (whole matrix), concatenate each char emb with hidden_state?, rnn: whole matrix
     #                               decoder: nchar 
     #last_char = torch.tensor(corpus.dictionary.char2idx['<bow>'], device=device)
     out, hidden_generator = generator(input, hidden_state, hidden_generator)
-    target = []
+    target = input[1:,:] # from input first item deleted and one row of zeros added
+    target= torch.cat((target, torch.zeros(1, input.shape[1]))).T
+    probs = torch.max(softmax(out), dim=2)[0] # seq_len * bs * nr_classes probs_of_word.append(torch.max(last_char, dim=1).values.item()) 
+    out = out.reshape(out.shape[1], out.shape[2], -1)
+    word_loss = criterion(out, target.to(dtype=int))
+    return word_loss, probs
 
 def generate_word(hidden_state, hidden_generator, target, last_idx, word_l, device = device):
     last_char = torch.tensor(corpus.dictionary.char2idx['<bow>'], device=device)
@@ -149,14 +141,13 @@ def train(data_source):
     model.train()
     #p = mp.Pool(mp.cpu_count())
     for batch, i in enumerate(range(0, train_d.size(0) - 1, seq_len)):
-        print('batch', batch)
         data_word, targets = get_batch(data_source, i, seq_len) # data word : sentence length x batch size 
         data_char = get_char_input(data_word, corpus.dictionary,device,eow, word_length) # data char (each word in one column): max word length x (seq_len*batchsize) 
         model.zero_grad()
         #initialise hidden states, hidden_state tuple of hidden state and cell sttate 
         hidden_state = model.init_hidden(config['bs'])
         hidden_char = model.charEncoder.init_hidden(config['bs'])
-        hidden_generator = generator.init_hidden(1) # only one word at a time 
+        hidden_generator = generator.init_hidden(config['bs']) # only one word at a time 
         beginning_char = 0 
         end_char = config['bs']
         seq_loss = 0
@@ -168,29 +159,13 @@ def train(data_source):
             #print('word shape: it should be bs * 1', data_word[id].shape)
             output, hidden_state, hidden_char = model(data_word[id], data_char_part, hidden_state, hidden_char) #out: sequence length, batch size, out_size,  hi[0] contains final hidden state for each element in batch 
             # hidden_state size: 1,6,100 batch size * hidden size 
-            lengths = [len(corpus.dictionary.idx2word[ix])+1 for ix in data_word[id+1]]
             loss = 0
-            generate_word_bs()
-            # GENERATE NEXT WORD: loop over all words in batch (could already be done one step further up) and generate word at time point n+1 
-            # one could parallelise the generation process (problem: don't want to detach it from current graph)
-            #for word_nr in range(hidden_state[0].shape[1]):
-            #    wl = lengths[word_nr]
-            #    hs = hidden_state[0][:, word_nr] # 1 x hidden size 
-            #    t = data_char_target_word[:, word_nr] # t is of size word_length, padded with 0s at the moment
-            #    stringy = [corpus.dictionary.idx2char[ti] for ti in t]
-            #    # words contain <eow> token at the end of word (final char)
-            #    l, _,_ = generate_word(hs, hidden_generator, t, eow,wl, device=device)
-            #    loss += l
-
-
-            # @TODO: one could include a word level predictor here 
+            word_loss, probs  = generate_word_bs(hidden_state, data_char_part, hidden_generator, device)
+            seq_loss += word_loss
             beginning_char = end_char
             end_char = beginning_char + config['bs']
-            seq_loss += loss
-        seq_loss = seq_loss/(seq_len*config['bs'])
-        print('batch loss', seq_loss)
-        #print(seq_loss)
-        #print('loss after batch {}: {}'.format(batch, seq_loss))
+        seq_loss = (seq_loss*data_word.shape[0])/data_word.shape[1]
+        print('batch {}, loss {}'.format(batch, seq_loss))
         seq_loss.backward()
         optimizer.step()
         hidden_state = repackage_hidden(hidden_state)
