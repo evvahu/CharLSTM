@@ -84,15 +84,15 @@ def evaluate(data_source):
                 output, hidden_state, hidden_char = model(data_word[id], data_char_part, hidden_state, hidden_char) #out: sequence length, batch size, out_size,  hi[0] contains final hidden state for each element in batch 
                 word_loss, probs = generate_word_bs(hidden_state, data_char_part, hidden_generator, device)
                 avg_prob.append(torch.mean(probs).item())
-                seq_loss += word_loss
+                seq_loss += word_loss.item()
                 beginning_char = end_char
                 end_char = beginning_char + config['bs']
             avg_seq_loss.append((seq_loss*data_word.shape[0])/data_word.shape[1])
             hidden_state = repackage_hidden(hidden_state)
             hidden_char = repackage_hidden(hidden_char)
             hidden_generator = repackage_hidden(hidden_generator)
-    
     return np.mean(avg_seq_loss), np.mean(avg_prob)
+    #return np.mean(avg_seq_loss), np.mean(avg_prob)
 
 def generate_word_bs(hidden_state, input, hidden_generator, device=device):
     # input: [BOW, 2,3,4,5,EOW, 0,0,0,0,0] 
@@ -102,10 +102,10 @@ def generate_word_bs(hidden_state, input, hidden_generator, device=device):
     #last_char = torch.tensor(corpus.dictionary.char2idx['<bow>'], device=device)
     out, hidden_generator = generator(input, hidden_state, hidden_generator)
     target = input[1:,:] # from input first item deleted and one row of zeros added
-    target= torch.cat((target, torch.zeros(1, input.shape[1]))).T
+    target= torch.cat((target.to(dtype=int), torch.zeros(1, input.shape[1], dtype=int, device=device))).T
     probs = torch.max(softmax(out), dim=2)[0] # seq_len * bs * nr_classes probs_of_word.append(torch.max(last_char, dim=1).values.item()) 
     out = out.reshape(out.shape[1], out.shape[2], -1)
-    word_loss = criterion(out, target.to(dtype=int))
+    word_loss = criterion(out, target)
     return word_loss, probs
 
 def generate_word(hidden_state, hidden_generator, target, last_idx, word_l, device = device):
