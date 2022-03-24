@@ -10,17 +10,21 @@ import torch
 import numpy as np
 import utils_data
 
-def batchify(data, bsz, cuda):
+def batchify(data_words, data_chars, bsz, cuda):
     # Work out how cleanly we can divide the dataset into bsz parts.
     
-    nbatch = data.size(0) // bsz
+    nbatch = data_words.size(0) // bsz
     # Trim off any extra elements that wouldn't cleanly fit (remainders).
-    data = data.narrow(0, 0, nbatch * bsz)
+    data_words = data_words.narrow(0, 0, nbatch * bsz)
+    data_chars = data_chars.narrow(0, 0, nbatch * bsz)
+    print(data_words.shape, data_chars.shape)
     # Evenly divide the data across the bsz batches.
-    data = data.view(bsz, -1).t().contiguous()
+    data_words = data_words.view(bsz, -1).t().contiguous()
+    data_chars = data_chars.view(bsz, -1).t().contiguous()
     if cuda:
-        data = data.cuda()
-    return data
+        data_words = data_words.cuda()
+        data_chars = data_chars.cuda()
+    return data_words, data_chars
 
 def repackage_hidden(h):
     """Detaches hidden states from their history."""
