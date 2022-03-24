@@ -2,3 +2,4 @@ config2.toml
 models/_generator
 models/_lstmmain
 try_run/
+__pycache__*
