@@ -33,6 +33,13 @@ def repackage_hidden(h):
     else:
         return tuple(repackage_hidden(v) for v in h)
 
+def get_char_batch(source, i, seq_length, max_l):
+    seq_len = min(seq_length, len(source) - 1 - i)
+    end_id = i + (seq_len * max_l)
+    data = source[i:end_id]
+    target = source[i+1:end_id]
+    
+    return data, target, end_id
 
 def get_batch(source, i, seq_length):
     seq_len = min(seq_length, len(source) - 1 - i)
