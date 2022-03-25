@@ -2,13 +2,13 @@
 
 title = "CONFIG CharLSTMLM"
 
-path = '/home/cluster/evhuber/data/Surprisal_LMs/data/wiki_splits_shortened'
+path = '/home/cluster/evhuber/data/wiki_no_unk_short'
 model_dir = 'try_run/models'
 log_path = 'try_run/logger'
 nr_epochs = 10
-bs = 34
+bs = 64
 seq_len = 15
-word_length = 12
+word_length = 10
 
 l_r = 0.1
 

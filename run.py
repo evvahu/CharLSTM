@@ -93,11 +93,12 @@ def evaluate(data_w, data_c):
                 output, hidden_state, hidden_char = model(data_word[id], data_char_part, hidden_state, hidden_char) #out: sequence length, batch size, out_size,  hi[0] contains final hidden state for each element in batch 
                 # hidden_state size: 1,6,100 batch size * hidden size
                 word_loss, probs  = generate_word_bs(hidden_state, data_char_part, hidden_generator, device)
+                avg_prob.append(torch.mean(probs).item())
                 seq_loss += word_loss
                 beginning_char = end_char
                 end_char = beginning_char + config['word_length']
             seq_loss = (seq_loss*data_word.shape[0])/data_word.shape[1]
-            avg_seq_loss.append(seq_loss)
+            avg_seq_loss.append(seq_loss.item())
             
             hidden_state = repackage_hidden(hidden_state)
             hidden_char = repackage_hidden(hidden_char)
@@ -111,13 +112,29 @@ def generate_word_bs(hidden_state, input, hidden_generator, device=device):
     # in generator: encode all chars (whole matrix), concatenate each char emb with hidden_state?, rnn: whole matrix
     #                               decoder: nchar 
     #last_char = torch.tensor(corpus.dictionary.char2idx['<bow>'], device=device)
+    
     out, hidden_generator = generator(input, hidden_state, hidden_generator)
     target = input[1:,:] # from input first item deleted and one row of zeros added
+    #print(input.shape, target.shape)
+    #check_chars(input,target)
     target= torch.cat((target.to(dtype=int), torch.zeros(1, input.shape[1], dtype=int, device=device))).T
+    #print(target.shape, out.shape)
     probs = torch.max(softmax(out), dim=2)[0] # seq_len * bs * nr_classes probs_of_word.append(torch.max(last_char, dim=1).values.item()) 
     out = out.reshape(out.shape[1], out.shape[2], -1)
     word_loss = criterion(out, target)
     return word_loss, probs
+
+def check_chars(input, target):
+    list_input = []
+    list_target = []
+    for i, x in enumerate(input.T):
+        for id in x:
+            list_input.append(corpus.dictionary.idx2char[int(id)])
+    for i,x in enumerate(target.T):
+        for id in x:
+            list_target.append(corpus.dictionary.idx2char[int(id)])
+    print(list_input)
+    print(list_target)
 
 def generate_word(hidden_state, hidden_generator, target, last_idx, word_l, device = device):
     last_char = torch.tensor(corpus.dictionary.char2idx['<bow>'], device=device)
@@ -155,7 +172,7 @@ def train(data_w, data_c):
     for batch, i in enumerate(range(0, data_w.size(0) - 1, seq_len)):
         data_word, target_word = get_batch(data_w, i, seq_len) # data word : sentence length x batch size
         data_char, target_char, end_char_i = get_char_batch(data_c, end_char_i, seq_len, config['word_length'])
-        print('data char and word shape', data_char.shape, data_word.shape)
+        #print('data char and word shape', data_char.shape, data_word.shape)
         #data_char = get_char_input(data_word, corpus.dictionary,device,eow, word_length) # data char (each word in one column): max word length x (seq_len*batchsize) 
         model.zero_grad()
         #initialise hidden states, hidden_state tuple of hidden state and cell sttate 

@@ -136,11 +136,11 @@ def create_corpus(input_path, output_path, vocab=dict(), oov=False):
     f_test.close()
 
 if __name__ == '__main__':
-    input = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki/wiki_tiny'
-    vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_dummy/vocab.txt'
-    char_vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_dummy/char_vocab.txt'
-    output = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_dummy/output.txt'
-    output_dir = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_dummy'
+    input = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki/wiki_short'
+    vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short/vocab.txt'
+    char_vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short/char_vocab.txt'
+    output = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short/output.txt'
+    output_dir = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short'
     oov = False
     
     ch2idx, idx2ch = create_char_vocab(input, 50, lower=True) # 26, 10, 4, 5

@@ -17,7 +17,7 @@ def batchify(data_words, data_chars, bsz, cuda):
     # Trim off any extra elements that wouldn't cleanly fit (remainders).
     data_words = data_words.narrow(0, 0, nbatch * bsz)
     data_chars = data_chars.narrow(0, 0, nbatch * bsz)
-    print(data_words.shape, data_chars.shape)
+    #print(data_words.shape, data_chars.shape)
     # Evenly divide the data across the bsz batches.
     data_words = data_words.view(bsz, -1).t().contiguous()
     data_chars = data_chars.view(bsz, -1).t().contiguous()

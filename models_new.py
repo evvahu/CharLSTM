@@ -117,7 +117,7 @@ class CharEncoder(nn.Module):
 
 
 class CharGenerator(nn.Module):
-    def __init__(self, hl_size, emb_size, nchar, nhid, nlayers, dropout, device, rnn_type = 'LSTM'):
+    def __init__(self, hl_size, emb_size, nchar, nhid, nlayers, dropout, device,padding_id=0, rnn_type = 'LSTM'):
         """
         hl_size: size of hidden layer of main LSTM
         emb_size: size of character embedding 
@@ -138,7 +138,7 @@ class CharGenerator(nn.Module):
                 raise ValueError( """An invalid option for `--model` was supplied,
                                  options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
             self.rnn = nn.RNN(ninp, nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
-        self.encoder = nn.Embedding(nchar+1, emb_size)
+        self.encoder = nn.Embedding(nchar+1, emb_size, padding_idx=padding_id)
         self.decoder = nn.Linear(nhid, nchar)
         self.drop = nn.Dropout(dropout)
         #self.softmax = nn.Softmax(dim=1)
