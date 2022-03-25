@@ -10,7 +10,7 @@ import torch
 import numpy as np
 import utils_data
 
-def batchify(data_words, data_chars, bsz, cuda):
+def batchify(data_words, data_chars, bsz):#, cuda):
     # Work out how cleanly we can divide the dataset into bsz parts.
     
     nbatch = data_words.size(0) // bsz
@@ -21,9 +21,9 @@ def batchify(data_words, data_chars, bsz, cuda):
     # Evenly divide the data across the bsz batches.
     data_words = data_words.view(bsz, -1).t().contiguous()
     data_chars = data_chars.view(bsz, -1).t().contiguous()
-    if cuda:
-        data_words = data_words.cuda()
-        data_chars = data_chars.cuda()
+    #if cuda:
+    #    data_words = data_words.cuda()
+    #    data_chars = data_chars.cuda()
     return data_words, data_chars
 
 def repackage_hidden(h):
@@ -82,3 +82,9 @@ def get_char_input(input, dictionary, device, eow, max_l=10):
     return char_mat
 
 
+class MyDataParallel(torch.nn.DataParallel):
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.module, name)
