@@ -6,7 +6,7 @@ path = '/home/cluster/evhuber/data/wiki_no_unk_dummy'
 model_dir = 'try_run/models'
 log_path = 'try_run/logger'
 nr_epochs = 10
-bs = 64
+bs = 128
 seq_len = 15
 word_length = 10
 

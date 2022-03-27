@@ -1,7 +1,7 @@
 import argparse
-from dict_old import Corpus, Dictionary
+from data import Corpus, Dictionary
 from utilsy import batchify, get_batch, get_char_input, repackage_hidden, get_char_batch, MyDataParallel
-from models_new import Encoder, CharGenerator
+from models import Encoder, CharGenerator
 import torch
 import numpy as np
 import multiprocessing as mp
@@ -130,7 +130,7 @@ def generate_word_bs(hidden_state, input, hidden_generator, device):
     # target [3,4,5,EOW, 0,0,0, additional_0]
     
     out, hidden_generator = generator(input, hidden_state, hidden_generator,device)
-    target = input[1:,:] # from input first item deleted and one row of zeros added
+    target = input[1:,:].to(device) # from input first item deleted and one row of zeros added
     #print(input.shape, target.shape)
     #check_chars(input,target)
     target= torch.cat((target.to(dtype=int), torch.zeros(1, input.shape[1], dtype=int, device=device))).T
@@ -195,7 +195,7 @@ def train(data_w, data_c):
     data_w: train data, word level
     data_c: train data, char level  
     """
-    model.train()
+    
     end_char_i = 0
     for batch, i in enumerate(range(0, data_w.size(0) - 1, seq_len)):
         # select the correct device 
@@ -208,10 +208,15 @@ def train(data_w, data_c):
         # get batch for word and character data
         data_word, _= get_batch(data_w, i, seq_len) # data word : seq length x batch size
         data_char, _, end_char_i = get_char_batch(data_c, end_char_i, seq_len, config['word_length']) # data char: (seq_length*max_word_length) X batch_size
-        model.zero_grad()
+
         # initialise hidden states, hidden_state tuple of hidden state and cell state
         # send everythign to curretn device
         model.to(device)
+        generator.to(device)
+        model.train()
+        generator.train()
+        generator.zero_grad()
+        model.zero_grad()
         generator.to(device)
         model.charEncoder.to(device) 
         hidden_state = [h.to(device) for h in model.init_hidden(config['bs'])]
@@ -226,6 +231,7 @@ def train(data_w, data_c):
             # get the correct characters for word 'id'
             data_char_part = data_char[beginning_char:end_char,] # max length of word X batch_size (always word at id point in sequence)
             # send word, characters to main LSTM forward call
+            print('data chaaar', data_char_part.shape)
             output, hidden_state, hidden_char = model(data_word[id], data_char_part, hidden_state, hidden_char, device) #out: sequence length, batch size, out_size,  hi[0] contains final hidden state for each element in batch 
             # generate next word based on hidden_state of LSTM with generator 
             word_loss, probs  = generate_word_bs(hidden_state, data_char_part, hidden_generator, device)
