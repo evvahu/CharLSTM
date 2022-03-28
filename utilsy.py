@@ -8,7 +8,6 @@
 
 import torch
 import numpy as np
-import utils_data
 
 def batchify(data_words, data_chars, bsz, cuda):
     # Work out how cleanly we can divide the dataset into bsz parts.

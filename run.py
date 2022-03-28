@@ -1,7 +1,7 @@
 import argparse
-from dict_old import Corpus, Dictionary
+from data import Corpus, Dictionary
 from utilsy import batchify, get_batch, get_char_input, repackage_hidden, get_char_batch
-from models_new import Encoder, CharGenerator
+from models import Encoder, CharGenerator
 import torch
 import numpy as np
 import multiprocessing as mp
@@ -49,8 +49,8 @@ params_char = [len(corpus.dictionary.idx2char), config['charmodel']['embedding_s
 
 # initialise models
 
-model = Encoder(config['wordmodel']['dropout'], config['wordmodel']['embedding_size'], config['wordmodel']['hidden_size'], config['wordmodel']['nlayers'], len(corpus.dictionary.idx2word),device, params_char )
-generator = CharGenerator(config['wordmodel']['hidden_size'], config['generator']['embedding_size'],len(corpus.dictionary.idx2char),  config['generator']['hidden_size'], config['generator']['nlayers'], config['generator']['dropout'], device)
+model = Encoder(config['wordmodel']['dropout'], config['wordmodel']['embedding_size'], config['wordmodel']['hidden_size'], config['wordmodel']['nlayers'], len(corpus.dictionary.idx2word),params_char )
+generator = CharGenerator(config['wordmodel']['hidden_size'], config['generator']['embedding_size'],len(corpus.dictionary.idx2char),  config['generator']['hidden_size'], config['generator']['nlayers'], config['generator']['dropout'])
 
 
 if gpu:
