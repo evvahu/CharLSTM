@@ -21,9 +21,7 @@ def batchify(data_words, data_chars, bsz, cuda):
     # Evenly divide the data across the bsz batches.
     data_words = data_words.view(bsz, -1).t().contiguous()
     data_chars = data_chars.view(bsz, -1).t().contiguous()
-    if cuda:
-        data_words = data_words.cuda()
-        data_chars = data_chars.cuda()
+
     return data_words, data_chars
 
 def repackage_hidden(h):

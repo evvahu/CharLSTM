@@ -189,7 +189,11 @@ def train(data_w, data_c):
             data_char_part = data_char[beginning_char:end_char,] # one word per column, column = batch size 
             #print('data char shape: for input and target', data_char_part.shape, data_char_target_word.shape)
             #print('word shape: it should be bs * 1', data_word[id].shape)
-            output, hidden_state, hidden_char = model(data_word[id], data_char_part, hidden_state, hidden_char) #out: sequence length, batch size, out_size,  hi[0] contains final hidden state for each element in batch 
+            data_word_part = data_word[id]
+            if torch.cuda.is_available():
+                data_char_part.cuda()
+                data_word_part.cuda()
+            output, hidden_state, hidden_char = model(data_word_part, data_char_part, hidden_state, hidden_char) #out: sequence length, batch size, out_size,  hi[0] contains final hidden state for each element in batch 
             # hidden_state size: 1,6,100 batch size * hidden size
             word_loss, probs  = generate_word_bs(hidden_state, data_char_part, hidden_generator, device)
             seq_loss += word_loss
