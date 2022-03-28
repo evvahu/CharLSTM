@@ -37,21 +37,22 @@ print('device:', device)
 gpu = False
 if torch.cuda.is_available():
     gpu = True
-#cpu_count = 6
-#if mp.cpu_count() < cpu_count:
-#    cpu_count = mp.cpu_count()
-train_w, train_c = batchify(corpus.train_words, corpus.train_chars, config['bs'], gpu)
 
+
+# load datasets as batches for both word level and char level 
+train_w, train_c = batchify(corpus.train_words, corpus.train_chars, config['bs'], gpu)
 test_w, test_c = batchify(corpus.test_words, corpus.test_chars, config['bs'], gpu)
 val_w, val_c = batchify(corpus.valid_words, corpus.valid_chars,config['bs'], gpu)
-print(train_w.size())
+
+
 params_char = [len(corpus.dictionary.idx2char), config['charmodel']['embedding_size'],  config['charmodel']['hidden_size'], config['charmodel']['dropout'], config['charmodel']['nlayers'], 'LSTM'] #(self, tokensize, ninp, nhid, dropout, nlayers=1, rnn_type='LSTM'):
-print('corpus dict', corpus.dictionary.idx2char[0])
-print(corpus.dictionary.char2idx)
-print(corpus.dictionary.idx2char)
+
+# initialise models
+
 model = Encoder(config['wordmodel']['dropout'], config['wordmodel']['embedding_size'], config['wordmodel']['hidden_size'], config['wordmodel']['nlayers'], len(corpus.dictionary.idx2word),device, params_char )
 generator = CharGenerator(config['wordmodel']['hidden_size'], config['generator']['embedding_size'],len(corpus.dictionary.idx2char),  config['generator']['hidden_size'], config['generator']['nlayers'], config['generator']['dropout'], device)
-#generator = CharGenerator(100, 100,, 100, 1, 0.1, device) # hl_size, emb_size, nchar, nhid, nlayers, dropout, rnn_type = 'LSTM'
+
+
 if gpu:
     model.cuda()
     generator.cuda()
@@ -63,10 +64,13 @@ eval_batch_size = config['bs']
 epochs = config['nr_epochs']
 
 eow = int(corpus.dictionary.char2idx['<eow>'])
-print(eow)
+#print(eow)
 
 
 def evaluate(data_w, data_c):
+    """
+    see train() for analogous code 
+    """
     avg_prob = []
     avg_seq_loss = []
     end_char_i = 0
@@ -107,11 +111,14 @@ def evaluate(data_w, data_c):
     return np.mean(avg_seq_loss), np.mean(avg_prob)
 
 def generate_word_bs(hidden_state, input, hidden_generator, device=device):
-    # input: [BOW, 2,3,4,5,EOW, 0,0,0,0,0] 
-    # target [2,3,4,5,EOW, 0,0,0, additional_0]
-    # in generator: encode all chars (whole matrix), concatenate each char emb with hidden_state?, rnn: whole matrix
-    #                               decoder: nchar 
-    #last_char = torch.tensor(corpus.dictionary.char2idx['<bow>'], device=device)
+    """
+    hidden_state: hidden state of main LSTM model
+    input: character input, batch_size X maximum length of word (each cell contains the index of a character, padded with 0s)
+    hidden_generator: initialised hidden_state for generator lstm
+    device: current device 
+    """
+    # input, coudl look something like [2,3,4,5,EOW, 0,0,0,0,0] 
+    # target [3,4,5,EOW, 0,0,0, additional_0]
     
     out, hidden_generator = generator(input, hidden_state, hidden_generator)
     target = input[1:,:] # from input first item deleted and one row of zeros added
@@ -125,6 +132,9 @@ def generate_word_bs(hidden_state, input, hidden_generator, device=device):
     return word_loss, probs
 
 def check_chars(input, target):
+    """
+    helper method to test input and target, not used 
+    """
     list_input = []
     list_target = []
     for i, x in enumerate(input.T):
@@ -137,6 +147,10 @@ def check_chars(input, target):
     print(list_target)
 
 def generate_word(hidden_state, hidden_generator, target, last_idx, word_l, device = device):
+    """
+    old method to generate one word at a time instead of batch size * word 
+    not used (too slow?)
+    """
     last_char = torch.tensor(corpus.dictionary.char2idx['<bow>'], device=device)
     probs_of_word = []
     word_loss = 0
@@ -166,10 +180,16 @@ def generate_word(hidden_state, hidden_generator, target, last_idx, word_l, devi
     return word_loss/i, probs_of_word, word_str
 
 def train(data_w, data_c):
+    """
+    method to train model and generator
+    data_w: train data, word level
+    data_c: train data, char level  
+    """
     model.train()
     #p = mp.Pool(mp.cpu_count())
     end_char_i = 0
     for batch, i in enumerate(range(0, data_w.size(0) - 1, seq_len)):
+        # get batch for word and character data
         data_word, target_word = get_batch(data_w, i, seq_len) # data word : sentence length x batch size
         data_char, target_char, end_char_i = get_char_batch(data_c, end_char_i, seq_len, config['word_length'])
         #print('data char and word shape', data_char.shape, data_word.shape)
@@ -185,16 +205,15 @@ def train(data_w, data_c):
         seq_loss = 0
         # loop over every word: give each word individually to LSTM main model so that we can retrieve hidden state at each word 
         for id in range(data_word.shape[0]-1): # -1 because after final word no word to predict 
-            #data_char_part = data_char[:,beginning_char:end_char] # get batch size big blocks of chars (for word at position *id*)
+            # get the correct characters for word 'id'
             data_char_part = data_char[beginning_char:end_char,] # one word per column, column = batch size 
-            #print('data char shape: for input and target', data_char_part.shape, data_char_target_word.shape)
-            #print('word shape: it should be bs * 1', data_word[id].shape)
             data_word_part = data_word[id]
             if torch.cuda.is_available():
                 data_char_part.cuda()
                 data_word_part.cuda()
+            # send word, characters to main LSTM forward call
             output, hidden_state, hidden_char = model(data_word_part, data_char_part, hidden_state, hidden_char) #out: sequence length, batch size, out_size,  hi[0] contains final hidden state for each element in batch 
-            # hidden_state size: 1,6,100 batch size * hidden size
+            # generate next word based on hidden_state of LSTM with generator 
             word_loss, probs  = generate_word_bs(hidden_state, data_char_part, hidden_generator, device)
             seq_loss += word_loss
             beginning_char = end_char
