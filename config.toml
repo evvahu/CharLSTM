@@ -2,7 +2,7 @@
 
 title = "CONFIG CharLSTMLM"
 
-path = '/home/cluster/evhuber/data/wiki_no_unk_dummy'
+path = '/home/cluster/evhuber/data/wiki_no_unk_short'
 model_dir = 'try_run/models'
 log_path = 'try_run/logger'
 nr_epochs = 10

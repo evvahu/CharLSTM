@@ -124,7 +124,7 @@ def generate_word_bs(hidden_state, input, hidden_generator, device=device):
     target = input[1:,:] # from input first item deleted and one row of zeros added
     #print(input.shape, target.shape)
     #check_chars(input,target)
-    target= torch.cat((target.to(dtype=int), torch.zeros(1, input.shape[1], dtype=int, device=device))).T
+    target= torch.cat((target.to(dtype=int).to(device), torch.zeros(1, input.shape[1], dtype=int, device=device))).T
     #print(target.shape, out.shape)
     probs = torch.max(softmax(out), dim=2)[0] # seq_len * bs * nr_classes probs_of_word.append(torch.max(last_char, dim=1).values.item()) 
     out = out.reshape(out.shape[1], out.shape[2], -1)

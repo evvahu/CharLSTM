@@ -90,14 +90,14 @@ class CharEncoder(nn.Module):
             #self.rnn = nn.RNN(ninp, nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
         self.init_weights()
     def forward(self, input, hidden):
-        #input = torch.tensor(input)
+        input = torch.tensor(input)
         #input.to(device)
         if torch.cuda.is_available():
             input = input.cuda()#to(device)
             self.encoder = self.encoder.cuda() #to(device)
-        print('input shape', input.shape)
-        emb = self.encoder(input)
-        print('emb shape', emb.shape)
+        #print('input shape', input.shape)
+        emb = self.drop(self.encoder(input))
+        #print('emb shape', emb.shape)
         #emb = self.drop(emb)
         #print('emb and hidden shape', emb.shape, hidden.shape)
         output, hidden = self.rnn(emb, hidden)
