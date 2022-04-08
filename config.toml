@@ -28,5 +28,5 @@ nlayers = 1
 
 embedding_size = 100
 hidden_size = 100
-nlayers = 2
+nlayers = 1
 dropout = 0.1

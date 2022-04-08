@@ -192,7 +192,6 @@ def train(data_w, data_c):
         # get batch for word and character data
         data_word, target_word = get_batch(data_w, i, seq_len) # data word : sentence length x batch size
         data_char, target_char, end_char_i = get_char_batch(data_c, end_char_i, seq_len, config['word_length'])
-        #print('data char and word shape', data_char.shape, data_word.shape)
         #data_char = get_char_input(data_word, corpus.dictionary,device,eow, word_length) # data char (each word in one column): max word length x (seq_len*batchsize) 
         model.zero_grad()
         #initialise hidden states, hidden_state tuple of hidden state and cell sttate 
@@ -206,7 +205,8 @@ def train(data_w, data_c):
         # loop over every word: give each word individually to LSTM main model so that we can retrieve hidden state at each word 
         for id in range(data_word.shape[0]-1): # -1 because after final word no word to predict 
             # get the correct characters for word 'id'
-            data_char_part = data_char[beginning_char:end_char,] # one word per column, column = batch size 
+            data_char_part = data_char[beginning_char:end_char,] # one word per column, column = batch size
+            print(data_char_part.shape) 
             data_word_part = data_word[id]
             if torch.cuda.is_available():
                 data_char_part.cuda()
