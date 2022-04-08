@@ -76,18 +76,14 @@ def evaluate(data_w, data_c):
     end_char_i = 0
     avg_prob = []
     avg_seq_loss = []
+    hidden_state = model.init_hidden(config['bs'])
+    hidden_char = model.charEncoder.init_hidden(config['bs'])
+    hidden_generator = generator.init_hidden(1) # only one word at a time 
     with torch.no_grad():
         for batch, i in enumerate(range(0, data_w.size(0) - 1, seq_len)):
             # get batch for word and character data
             data_word, target_word = get_batch(data_w, i, seq_len) # data word : sentence length x batch size
             data_char, target_char, end_char_i = get_char_batch(data_c, end_char_i, seq_len, config['word_length'])
-            #print('data char and word shape', data_char.shape, data_word.shape)
-            #data_char = get_char_input(data_word, corpus.dictionary,device,eow, word_length) # data char (each word in one column): max word length x (seq_len*batchsize) 
-            model.zero_grad()
-            #initialise hidden states, hidden_state tuple of hidden state and cell sttate 
-            hidden_state = model.init_hidden(config['bs'])
-            hidden_char = model.charEncoder.init_hidden(config['bs'])
-            hidden_generator = generator.init_hidden(1) # only one word at a time 
             beginning_char = 0 
             #end_char = config['bs']
             end_char = config['word_length']
@@ -114,13 +110,13 @@ def evaluate(data_w, data_c):
                     stringy = [corpus.dictionary.idx2char[ti] for ti in t]
                     # words contain <eow> token at the end of word (final char)
                     l, prob,outcome= generate_word(hs, hidden_generator, t, eow,wl, device)
-                    print(prob, type(prob))
                     avg_prob.append(np.mean(prob))
                     loss += l
                 loss = loss/word_nr 
                 seq_loss += loss
                 beginning_char = end_char
                 end_char = beginning_char + config['word_length']
+
             seq_loss = (seq_loss*data_word.shape[0])/data_word.shape[1]
             avg_seq_loss.append(seq_loss.item())
             print('batch {}, loss {}'.format(batch, seq_loss))
@@ -180,7 +176,6 @@ def generate_word(hidden_state, hidden_generator, target, last_idx, word_l, devi
     target_str = ''
     for i in range(word_l):
         out, hidden_generator = generator(last_char, hidden_state, hidden_generator)
-        #target = target[i].unsqueeze(0)
         t = target[i].unsqueeze(0)
         target_str += corpus.dictionary.idx2char[t]
         out = out.view(1,-1)
@@ -188,11 +183,9 @@ def generate_word(hidden_state, hidden_generator, target, last_idx, word_l, devi
         word_loss += l
         last_char = softmax(out)
         probs_of_word.append(torch.max(last_char, dim=1).values.item())
-        #last_char = torch.squeeze(torch.argmax(last_char, dim=1))
         last_char = torch.argmax(last_char,dim=1).squeeze()
         word_str = word_str + corpus.dictionary.idx2char[last_char.item()]
         if last_char.item() == last_idx:
-            #print('broken after eow', last_char, last_idx, i)
             break
     if i == 0:
         i = 1
@@ -208,19 +201,15 @@ def train(data_w, data_c):
     model.train()
     #p = mp.Pool(mp.cpu_count())
     end_char_i = 0
+    hidden_state = model.init_hidden(config['bs'])
+    hidden_char = model.charEncoder.init_hidden(config['bs'])
+    hidden_generator = generator.init_hidden(1) # only one word at a time 
     for batch, i in enumerate(range(0, data_w.size(0) - 1, seq_len)):
         # get batch for word and character data
         data_word, target_word = get_batch(data_w, i, seq_len) # data word : sentence length x batch size
         data_char, target_char, end_char_i = get_char_batch(data_c, end_char_i, seq_len, config['word_length'])
-        #print('data char and word shape', data_char.shape, data_word.shape)
-        #data_char = get_char_input(data_word, corpus.dictionary,device,eow, word_length) # data char (each word in one column): max word length x (seq_len*batchsize) 
         model.zero_grad()
-        #initialise hidden states, hidden_state tuple of hidden state and cell sttate 
-        hidden_state = model.init_hidden(config['bs'])
-        hidden_char = model.charEncoder.init_hidden(config['bs'])
-        hidden_generator = generator.init_hidden(1) # only one word at a time 
         beginning_char = 0 
-        #end_char = config['bs']
         end_char = config['word_length']
         seq_loss = 0
         # loop over every word: give each word individually to LSTM main model so that we can retrieve hidden state at each word 
@@ -251,7 +240,7 @@ def train(data_w, data_c):
             beginning_char = end_char
             end_char = beginning_char + config['word_length']
         seq_loss = (seq_loss*data_word.shape[0])/data_word.shape[1]
-        print('batch {}, loss {}'.format(batch, seq_loss))
+        logging.info('batch {}, loss {}'.format(batch, seq_loss))
         seq_loss.backward()
         optimizer.step()
         hidden_state = repackage_hidden(hidden_state)
