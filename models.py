@@ -19,7 +19,7 @@ class Encoder(nn.Module):
             self.rnn = getattr(nn, rnn_type)(rnn_dim, nhid, nlayers, dropout=dropout)
         else:
             try:
-                nonlinearity = {'RNN_TANH': 'tanh', 'RNN_RELU': 'relu'}[rnn_type]
+                nonlinearity = {'RNN_TANH': 'tanh', 'RNN_RELU': 'relu', 'RNN_ELU': 'elu', 'RNN_SELU':'selu'}[rnn_type]
             except KeyError:
                 raise ValueError( """An invalid option for `--model` was supplied,
                                  options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
@@ -154,16 +154,10 @@ class CharGenerator(nn.Module):
         """
         if torch.cuda.is_available():
             input = input.cuda()
-        #hidden_lstm.to(device)
         input = self.encoder(input)
-        #print('input', input.shape)
-        hidden_lstm = hidden_lstm[0][0].unsqueeze(0)
-        hidden_lstm = hidden_lstm.expand(input.shape[0],-1,-1)
-        #print('hidden', hidden_lstm.shape)
-        input_cat = torch.cat((input, hidden_lstm), 2) # needs to be right dim
-        #print('cat input', input_cat.shape)
-        #input_cat = torch.unsqueeze(input_cat, 0).unsqueeze(0)
-        #print(input_cat.shape)
+        hidden_lstm = hidden_lstm[1].squeeze()
+        input_cat = torch.cat((input, hidden_lstm), 0) # needs to be right dim 
+        input_cat = torch.unsqueeze(input_cat, 0).unsqueeze(0)
         input_cat = self.drop(input_cat)
         output, hidden = self.rnn(input_cat, hidden)
         output = self.drop(output)
