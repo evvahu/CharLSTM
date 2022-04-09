@@ -212,10 +212,7 @@ def train(data_w, data_c):
         # get batch for word and character data
         data_word, target_word = get_batch(data_w, i, seq_len) # data word : sentence length x batch size
         data_char, target_char, end_char_i = get_char_batch(data_c, end_char_i, seq_len, config['word_length'])
-<<<<<<< HEAD
         #data_char = get_char_input(data_word, corpus.dictionary,device,eow, word_length) # data char (each word in one column): max word length x (seq_len*batchsize) 
-=======
->>>>>>> word_individual
         model.zero_grad()
         beginning_char = 0 
         end_char = config['word_length']
@@ -238,7 +235,7 @@ def train(data_w, data_c):
             loss = 0
             for word_nr in range(hidden_state[0].shape[1]): # 34 
                 wl = lengths[word_nr]
-                hs = hidden_state[0][:, word_nr] # 1 x hidden size
+                hs = hidden_state[1][:, word_nr] # 1 x hidden size
                 t = data_char_target_word[:, word_nr] # t is of size word_length, padded with 0s at the moment
                 stringy = [corpus.dictionary.idx2char[ti] for ti in t]
                 # words contain <eow> token at the end of word (final char)
