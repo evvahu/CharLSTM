@@ -177,8 +177,10 @@ def generate_word(hidden_state, hidden_generator, target, last_idx, word_l, devi
     for i in range(word_l):
         out, hidden_generator = generator(last_char, hidden_state, hidden_generator)
         t = target[i].unsqueeze(0)
-        target_str += corpus.dictionary.idx2char[t]
+        target_str = target_str + corpus.dictionary.idx2char[t]
         out = out.view(1,-1)
+        if torch.cuda.is_available():
+            t = t.cuda()
         l = criterion(out, t)
         word_loss += l
         last_char = softmax(out)
@@ -189,6 +191,8 @@ def generate_word(hidden_state, hidden_generator, target, last_idx, word_l, devi
             break
     if i == 0:
         i = 1
+    target_str = ''.join([corpus.dictionary.idx2char[t] for t in target])
+    print(target_str, word_str)
     #print(word_str, target_str)
     return word_loss/i, probs_of_word, word_str
 
