@@ -16,14 +16,14 @@ class Encoder(nn.Module):
 
         rnn_dim = ninp + params_char[1]
         if rnn_type in ['LSTM', 'GRU']:
-            self.rnn = getattr(nn, rnn_type)(rnn_dim, nhid, nlayers, dropout=dropout)
+            self.rnn = getattr(nn, rnn_type)(rnn_dim, nhid, nlayers, batch_first=False, dropout=dropout)
         else:
             try:
                 nonlinearity = {'RNN_TANH': 'tanh', 'RNN_RELU': 'relu', 'RNN_ELU': 'elu', 'RNN_SELU':'selu'}[rnn_type]
             except KeyError:
                 raise ValueError( """An invalid option for `--model` was supplied,
                                  options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
-            self.rnn = nn.RNN(rnn_dim, nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
+            self.rnn = nn.RNN(rnn_dim, nhid, nlayers, nonlinearity=nonlinearity, batch_first=False, dropout=dropout)
           
         self.decoder = nn.Linear(nhid, ntoken)
         self.init_weights()
@@ -41,10 +41,11 @@ class Encoder(nn.Module):
         
         emb_word = self.encoder(word_input)
         #emb_word = torch.flatten(emb_word, )
-        #print('SHAPE', emb_word.shape, hidden_char[0].view(emb_word.shape[0], -1).shape)
-        emb_concat = self.drop(torch.cat((emb_word, hidden_char[0].view(emb_word.shape[0],-1)), 1)) # hidden_char[0] is hidden state (1 is cell state)
-        emb_concat = torch.unsqueeze(emb_concat, 0)
-        #print('rnn hidden', rnn_hidden.shape)
+        #hidden_char[0].view(emb_word.shape[0],-1)), 1 OOOOLD
+        #hidden_char_ref = hidden_char[0].squeeze()
+        hidden_char_ref = hidden_char[0].squeeze()
+        emb_concat = self.drop(torch.cat((emb_word, hidden_char_ref), 1)) # hidden_char[0] is hidden state (1 is cell state)
+        emb_concat = emb_concat.unsqueeze(0)#.unsqueeze(0) 
         output, hidden = self.rnn(emb_concat, rnn_hidden)
         output = self.drop(output)
         decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
@@ -79,7 +80,7 @@ class CharEncoder(nn.Module):
 
         if rnn_type in ['LSTM', 'GRU']:
             print('RNN TYPE', rnn_type)
-            self.rnn = getattr(nn, rnn_type)(ninp, nhid, nlayers, dropout=dropout)
+            self.rnn = getattr(nn, rnn_type)(ninp, nhid, nlayers,batch_first=True, dropout=dropout)
         else:
             print('wrong type')
             #try:
@@ -97,7 +98,6 @@ class CharEncoder(nn.Module):
             self.encoder = self.encoder.cuda() #to(device)
         #print('input shape', input.shape)
         emb = self.drop(self.encoder(input))
-        #print('emb shape', emb.shape)
         #emb = self.drop(emb)
         #print('emb and hidden shape', emb.shape, hidden.shape)
         output, hidden = self.rnn(emb, hidden)
@@ -119,7 +119,13 @@ class CharEncoder(nn.Module):
                     weight.new(self.nlayers, bsz, self.nhid).zero_())
         else:
             return weight.new(self.nlayers, bsz, self.nhid).zero_()
-
+        """
+        if self.rnn_type == 'LSTM':
+            return (weight.new(self.nlayers, bsz, self.nhid).zero_(),
+                    weight.new(self.nlayers, bsz, self.nhid).zero_())
+        else:
+            return weight.new(self.nlayers, bsz, self.nhid).zero_()
+        """
 
 class CharGenerator(nn.Module):
     def __init__(self, hl_size, emb_size, nchar, nhid, nlayers, dropout,padding_id=0, rnn_type = 'LSTM'):
@@ -155,7 +161,7 @@ class CharGenerator(nn.Module):
         if torch.cuda.is_available():
             input = input.cuda()
         input = self.encoder(input)
-        hidden_lstm = hidden_lstm[1].squeeze()
+        #hidden_lstm = hidden_lstm[1].squeeze()
         input_cat = torch.cat((input, hidden_lstm), 0) # needs to be right dim 
         input_cat = torch.unsqueeze(input_cat, 0).unsqueeze(0)
         input_cat = self.drop(input_cat)

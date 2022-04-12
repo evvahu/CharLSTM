@@ -52,11 +52,12 @@ def create_vocab(path, vocab_size, lower=False):
                 counter[word.lower()] += 1
             else:
                 counter[word] +=1
-
-    count_pairs = sorted(counter.items(), key=lambda x: (-x[1], x[0]))[:vocab_size]
-    words = [w for (w, v) in count_pairs]
-    print(len(count_pairs))
-    print(len(counter), count_pairs[vocab_size - 1])
+    if vocab_size > 0:
+        count_pairs = sorted(counter.items(), key=lambda x: (-x[1], x[0]))[:vocab_size]
+        words = [w for (w, v) in count_pairs]
+    else:
+        words = [w for (w,v) in counter.items()]
+    print(len(words))
     w2idx = dict(zip(words, range(len(words))))
     idx2w = dict(zip(range(len(words)), words))
     return w2idx, idx2w
@@ -136,11 +137,11 @@ def create_corpus(input_path, output_path, vocab=dict(), oov=False):
     f_test.close()
 
 if __name__ == '__main__':
-    input = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki/wiki_short'
-    vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short/vocab.txt'
-    char_vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short/char_vocab.txt'
-    output = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short/output.txt'
-    output_dir = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short'
+    input = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki/wiki_tiny'
+    vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_dummy/vocab.txt'
+    char_vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_dummy/char_vocab.txt'
+    output = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_dummy/output.txt'
+    output_dir = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_dummy'
     oov = False
     
     ch2idx, idx2ch = create_char_vocab(input, 50, lower=True) # 26, 10, 4, 5
@@ -148,7 +149,7 @@ if __name__ == '__main__':
         for k,v in ch2idx.items():
             wf.write('{}\n'.format(k)) 
 
-    w2idx, idx2w = create_vocab(input, 500, lower=True)
+    w2idx, idx2w = create_vocab(input, -500, lower=True)
     with open (vocab, 'w') as wf:
         for k,v in w2idx.items():
             wf.write('{}\n'.format(k))

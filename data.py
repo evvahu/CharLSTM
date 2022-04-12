@@ -8,6 +8,7 @@
 from email.policy import default
 import os
 from re import I
+from regex import W
 import torch
 from collections import defaultdict
 import logging
@@ -16,6 +17,9 @@ import re
 from tqdm import tqdm
 import multiprocessing as mp
 from itertools import zip_longest
+from multiprocessing import Pool
+from itertools import repeat
+import math 
 
 class Dictionary(object):
     def __init__(self, path):
@@ -34,20 +38,17 @@ class Dictionary(object):
             self.idx2char = [c for c in char_vocab.split()]
             self.char2idx['*PAD*'] = 0
             self.idx2char.insert(0, '*PAD*')
+            
             self.add_char('<unk>')
             self.add_char('<bow>')
             self.add_char('<eow>')
+            self.idx2word = [w for w in vocab.split()]
             self.word2idx = {w: i for i, w in enumerate(vocab.split())}
             self.add_word('<unk>')
-            self.idx2word = [w for w in vocab.split()]
+            
             self.vocab_file_exists = True
         except FileNotFoundError:
             logging.info("Vocab file not found, create a vocab file first.")
-            #self.create_vocab(os.path.join(path, 'train.txt'))
-            #open(vocab_path,"w").write("\n".join([w for w in self.idx2word]))
-        #self.char2idx, self.idx2char, self.max_l = self.get_char_dict()
-        print(self.char2idx)
-        print(self.idx2char)
 
     def add_char(self, char):
         self.char2freq[char] += 1
@@ -60,7 +61,6 @@ class Dictionary(object):
         if word not in self.word2idx:
             self.idx2word.append(word)
             self.word2idx[word] = len(self.idx2word) - 1
-        #return self.word2idx[word]
 
     def __len__(self):
         return len(self.idx2word)
@@ -97,64 +97,79 @@ class Dictionary(object):
 
 
 class Corpus(object):
-    def __init__(self, path, word_max_l):
+    def __init__(self, path, word_max_l, seq_l, cpu_count=None):
+        self.max_l = word_max_l
+        self.seq_l = seq_l
+        if not cpu_count:
+            self.cpu_count = mp.cpu_count()
+        else:
+            self.cpu_count = cpu_count
         self.dictionary = Dictionary(path)
-        print('finished')
-        self.train_words, self.train_chars = tokenize(self.dictionary, os.path.join(path, 'train.txt'), word_max_l)
-        print('finished loading train')
-        self.valid_words, self.valid_chars = tokenize(self.dictionary, os.path.join(path, 'valid.txt'), word_max_l)
-        self.test_words, self.test_chars = tokenize(self.dictionary, os.path.join(path, 'test.txt'), word_max_l)
-        print('finished tokenising all data files')
+        self.train_words, self.train_chars = self.tokenize(os.path.join(path, 'train.txt'))
+        self.valid_words, self.valid_chars = self.tokenize(os.path.join(path, 'valid.txt'))
+        self.test_words, self.test_chars = self.tokenize(os.path.join(path, 'test.txt'))
+
+    def _grouper(self, n, iterable, padvalue=None):
+        return zip_longest(*[iter(iterable)]*n, fillvalue=padvalue)
 
 
-def tokenize(dictionary, path, max_l):
-    """Tokenizes a text file for training or testing to a sequence of indices format
-       We assume that training and test data has <eos> symbols """
-    assert os.path.exists(path)
-    nr_lines = 0
-    with open(path, 'r', encoding="utf8") as f:
-        ntokens = 0
-        for line in f:
-            nr_lines +=1
-            words = line.split()
-            ntokens += len(words)
+    def parallel_tokenize(self, chunk):
+        words = chunk.split()
+        ntokens = len(words)
+        ids = torch.zeros(ntokens, dtype=torch.long)
+        ids_chars = torch.zeros((ntokens, self.max_l), dtype=torch.long)
 
-    # Tokenize file content
-    with open(path, 'r', encoding="utf8") as f:
-        ids = torch.LongTensor(ntokens)
-        ids_chars = torch.LongTensor(ntokens, max_l)
-        token = 0
-        for line in tqdm(f, total=nr_lines):
-        #for line in f:
-            line = line.strip()
-            if not line: continue
-            words = line.split()
-            for word in words:
-                if word in dictionary.word2idx:
-                    ids[token] = dictionary.word2idx[word]
+        for i, w in enumerate(words):
+            if w in self.dictionary.word2idx:
+                ids[i] = self.dictionary.word2idx[w]
+            else:
+                ids[i] = self.dictionary.word2idx["<unk>"] 
+            char_tens = torch.zeros(self.max_l, dtype=torch.long)
+            c_local = 0
+            too_long = False
+            for c in w: 
+                if c in self.dictionary.char2idx:
+                    char_tens[c_local] = self.dictionary.char2idx[c]
                 else:
-                    ids[token] = dictionary.word2idx["<unk>"]
-                
-                char_tens = torch.zeros(max_l, dtype=int)
-                c_local = 0
-                too_long = False
-                for c in word: 
-                    if c in dictionary.char2idx:
-                        char_tens[c_local] = dictionary.char2idx[c]
-                    else:
-                        char_tens[c_local] = dictionary.char2idx['<unk>']
-                    c_local +=1 
-                    if c_local == (max_l-1):
-                        char_tens[c_local] = dictionary.char2idx['<eow>']
-                        too_long = True
-                        break
+                    char_tens[c_local] = self.dictionary.char2idx['<unk>']
+                c_local +=1 
+                if c_local == (self.max_l-1):
+                    char_tens[c_local] = self.dictionary.char2idx['<eow>']
+                    too_long = True
+                    break
                 if not too_long:
-                    char_tens[c_local] = dictionary.char2idx['<eow>']
-                #ids_chars = torch.cat((ids_chars, char_tens))
-                ids_chars[token,:] = char_tens
-                token += 1
-    return ids, ids_chars
+                    char_tens[c_local] = self.dictionary.char2idx['<eow>']
+                    #ids_chars = torch.cat((ids_chars, char_tens))
+            ids_chars[i:, ] = char_tens
+
+        return ids, ids_chars
+
+    def tokenize(self, path):
+        """Tokenizes a text file for training or testing to a sequence of indices format
+        We assume that training and test data has <eos> symbols """
+        assert os.path.exists(path)
+        # Tokenize file content
+        reader = open(path, 'r', encoding="utf8")
+        pool = mp.Pool(self.cpu_count)
+        words = torch.zeros(0)
+        chars = torch.zeros(0)
+        for chunk in self._grouper(10, reader):
+            res = pool.map(self.parallel_tokenize, chunk)
+            if words.shape == 0:
+                words = res[0][0]
+                chars = res[0][1]
+                for tup in res[1:]:
+                    words = torch.cat((words, tup[0]), dim=0)
+                    chars = torch.cat((chars, tup[1]), dim=0)
+            else:
+                for tup in res:
+                    words = torch.cat((words, tup[0]))
+                    chars = torch.cat((chars, tup[1]))
+        pool.close()
+        return words, chars
 
 if __name__ == '__main__':
     path = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_dummy'
-    corp = Corpus(path, 12)
+    #path = '/Users/eva/Documents/Work/experiments/Agent_first_project/CharLSTMLM/testfiles'
+    corp = Corpus(path, 12, 15, 1)
+    print(corp.dictionary.word2idx)

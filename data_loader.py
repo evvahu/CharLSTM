@@ -10,93 +10,60 @@ import re
 from tqdm import tqdm
 import multiprocessing as mp
 from itertools import zip_longest
-
+from data import Corpus
 
 class Data(Dataset):
-  def __init__(self, list_IDs, labels):
-        'Initialization'
-        self.labels = labels
-        self.list_IDs = list_IDs
+    def __init__(self, words, chars, nchars, seq_len):
+        self.nchars = nchars
+        self.seq_len = seq_len
+        self.data_words, self.data_chars = self.batchify(words, chars)
+        
+    def batchify(self, data_words, data_chars):
+        nseqs = data_words.size(0) // self.seq_len # floor division
 
-  def __len__(self):
-        'Denotes the total number of samples'
-        return len(self.list_IDs)
-
-  def __getitem__(self, index):
-        'Generates one sample of data'
-        # Select sample
-        ID = self.list_IDs[index]
-
-        # Load data and get label
-
-        return X, y
-
-
-class Dictionary(object):
-    def __init__(self, path):
-        self.word2idx = {}
-        self.idx2word = []
-        self.char2idx = {}
-        self.idx2char = []
-        vocab_path = os.path.join(path, 'vocab.txt')
-        char_vocab_path = os.path.join(path, 'char_vocab.txt')
-        try:
-            vocab = open(vocab_path, encoding="utf8").read()
-            char_vocab = open(char_vocab_path, encoding='utf8').read()
-            self.char2idx = {c:i+1 for i,c in enumerate(char_vocab.split())}
-            self.idx2char = [c for c in char_vocab.split()]
-            self.char2idx['*PAD*'] = 0
-            self.idx2char.insert(0, '*PAD*')
-            self.add_char('<unk>')
-            self.add_char('<bow>')
-            self.add_char('<eow>')
-            self.word2idx = {w: i for i, w in enumerate(vocab.split())}
-            self.add_word('<unk>')
-            self.idx2word = [w for w in vocab.split()]
-            self.vocab_file_exists = True
-        except FileNotFoundError:
-            logging.info("Vocab file not found, create a vocab file first.")
-        print(self.char2idx)
-        print(self.idx2char)
-
-    def add_char(self, char):
-        if char not in self.char2idx:
-            self.idx2char.append(char)
-            self.char2idx[char] = len(self.idx2char) - 1
-
-    def add_word(self, word):
-        if word not in self.word2idx:
-            self.idx2word.append(word)
-            self.word2idx[word] = len(self.idx2word) - 1
+        data_words = data_words.narrow(0,0,nseqs*self.seq_len)
+        data_chars = data_chars.narrow(0,0, nseqs*self.seq_len)
+        
+        data_words = data_words.reshape(nseqs, self.seq_len)
+        data_chars = data_chars.reshape(nseqs, self.seq_len*self.nchars)
+        #assert data_words.shape[0] ==  int(data_chars.shape[0]/12), print('wrong batchifying')
+        return data_words, data_chars
 
     def __len__(self):
-        return len(self.idx2word), len(self.idx2char)
+        'Denotes the total number of samples'
+        return self.data_words.shape[0]
 
-    def create_vocab(self, path):
-        with open(path, 'r', encoding="utf8") as f:
-            for line in f:
-                words = line.split()
-                for word in words:
-                    self.add_word(word)
+    def __getitem__(self, index):
+        'Generates one sample of data'
+        # Select sample
+        return {'words': self.data_words[index], 'chars': self.data_chars[index]}
 
-    def get_char_dict(self):
-        char2idx = dict()
-        idx2char = ['*PAD*']
-        i = 1
-        max_l = 0
-        for w in self.idx2word:
-            if len(w) > max_l:
-                max_l = len(w)
-            for c in w:
-                c = c.lower()
-                if c not in char2idx:
-                    idx2char.append(c)
-                    char2idx[c] = i
-                    i += 1
-        
-        char2idx['<eow>'] = i
-        idx2char.append('<eow>')
-        char2idx['<bow>'] = i + 1
-        idx2char.append('<bow>')
 
-        return char2idx, idx2char, max_l
+if __name__ == '__main__':
+    path = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_dummy'
+    #path = '/Users/eva/Documents/Work/experiments/Agent_first_project/CharLSTMLM/testfiles'
+    seq_len = 15
+    nchars = 12
+    corp = Corpus(path, nchars,seq_len)
+    
+    print(corp.train_words.shape, corp.train_chars.shape)
+    ex_words = corp.train_words[:seq_len].tolist()
+    ex_chars = corp.train_chars[0].tolist()
+    print(ex_chars)
+
+    word_list = [corp.dictionary.idx2word[int(id)] for id in ex_words]
+    char_list = [corp.dictionary.idx2char[int(id)] for id in ex_chars]
+
+    print(word_list)
+    print(char_list)
+
+    dat = Data(corp.train_words, corp.train_chars, nchars, seq_len)
+    print(dat.data_words.shape, dat.data_chars.shape)
+    
+    ex_words = dat.data_words[-1].tolist()
+    ex_chars = dat.data_chars[-1].tolist()
+
+    word_list = [corp.dictionary.idx2word[int(id)] for id in ex_words]
+    char_list = [corp.dictionary.idx2char[int(id)] for id in ex_chars]
+    print(word_list)
+    print(char_list) 
