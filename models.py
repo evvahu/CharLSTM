@@ -12,9 +12,10 @@ class Encoder(nn.Module):
         self.rnn_type = rnn_type
         self.encoder = nn.Embedding(ntoken, ninp)
         
-        self.charEncoder = CharEncoder(*params_char)
+        #self.charEncoder = CharEncoder(*params_char)
 
-        rnn_dim = ninp + params_char[1]
+        #rnn_dim = ninp + params_char[1]
+        rnn_dim = ninp
         if rnn_type in ['LSTM', 'GRU']:
             self.rnn = getattr(nn, rnn_type)(rnn_dim, nhid, nlayers, batch_first=False, dropout=dropout)
         else:
@@ -25,37 +26,50 @@ class Encoder(nn.Module):
                                  options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
             self.rnn = nn.RNN(rnn_dim, nhid, nlayers, nonlinearity=nonlinearity, batch_first=False, dropout=dropout)
           
-        self.decoder = nn.Linear(nhid, ntoken)
+        #self.decoder = nn.Linear(nhid, ntoken)
+        self.decoder = CharGenerator(*params_char)
         self.init_weights()
         self.nhid = nhid
         self.nlayers = nlayers
 
     def forward(self, word_input, char_input, rnn_hidden, hidden_char):
-        #print('CHAR', char_input.shape, char_hidden.shape)
+   
         if torch.cuda.is_available():
             word_input = word_input.cuda() #to(device)
             char_input = char_input.cuda() #.to(device)
 
         #hidden_char.to(device)
-        _, hidden_char = self.charEncoder(char_input, hidden_char) # take last hidden state of character LSTM 
+        #_, hidden_char = self.charEncoder(char_input, hidden_char) # take last hidden state of character LSTM 
+        hs_main = []
+        hs_chars = []
+        outputs = []
+        for id in range(word_input.shape[1]-1):
+            #print('in forward', word_input[:,id].shape)
+            emb_word = self.encoder(word_input[:,id].long()).unsqueeze(0)
+            #emb_word = torch.flatten(emb_word, )
+            #hidden_char[0].view(emb_word.shape[0],-1)), 1 OOOOLD
+
+            #hidden_char_ref = hidden_char[0].squeeze()
+            #emb_concat = self.drop(torch.cat((emb_word, hidden_char_ref), 1)) # hidden_char[0] is hidden state (1 is cell state)
+            #emb_concat = emb_concat.unsqueeze(0)#.unsqueeze(0) 
+            #output, hidden = self.rnn(emb_concat, rnn_hidden)
+            output, hidden = self.rnn(emb_word, rnn_hidden)
+            current_char = char_input[:,id, :].long() 
+            output_decoder, hidden_char = self.decoder(current_char, hidden[0][1].squeeze(), hidden_char) #char input has to be n+1
+            outputs.append(output_decoder.view(output_decoder.shape[0], output_decoder.shape[2], -1))
+            #hs_main.append(hidden)
+            #hs_chars.append(hidden_decoder)
+            #output = self.drop(output)
+            #decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
         
-        emb_word = self.encoder(word_input)
-        #emb_word = torch.flatten(emb_word, )
-        #hidden_char[0].view(emb_word.shape[0],-1)), 1 OOOOLD
-        #hidden_char_ref = hidden_char[0].squeeze()
-        hidden_char_ref = hidden_char[0].squeeze()
-        emb_concat = self.drop(torch.cat((emb_word, hidden_char_ref), 1)) # hidden_char[0] is hidden state (1 is cell state)
-        emb_concat = emb_concat.unsqueeze(0)#.unsqueeze(0) 
-        output, hidden = self.rnn(emb_concat, rnn_hidden)
-        output = self.drop(output)
-        decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
-        return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden, hidden_char
+        #return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden, hidden_char
+        return outputs, hidden, hidden_char #torch.stack(hs_main), torch.stack(hs_chars)
 
     def init_weights(self):
         initrange = 0.1
         self.encoder.weight.data.uniform_(-initrange, initrange)
-        self.decoder.bias.data.fill_(0)
-        self.decoder.weight.data.uniform_(-initrange, initrange)
+       # self.decoder.bias.data.fill_(0)
+       # self.decoder.weight.data.uniform_(-initrange, initrange)
 
 
     def init_hidden(self, bsz):
@@ -66,13 +80,13 @@ class Encoder(nn.Module):
         else:
             return weight.new(self.nlayers, bsz, self.nhid).zero_()
 
+
+
 class CharEncoder(nn.Module):
 
     def __init__(self, tokensize, ninp, nhid, dropout, nlayers=1, rnn_type='LSTM'):
         super(CharEncoder, self).__init__()
-        self.encoder = nn.Embedding(tokensize, ninp, padding_idx =0)
-        print('sizes of encoder ', tokensize, ninp )
-        self.decoder = nn.Linear(nhid, tokensize)
+
         self.rnn_type = rnn_type
         self.nlayers = nlayers
         self.nhid = nhid
@@ -89,6 +103,9 @@ class CharEncoder(nn.Module):
             #    raise ValueError( """An invalid option for `--model` was supplied,
             #                     options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
             #self.rnn = nn.RNN(ninp, nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
+        self.encoder = nn.Embedding(tokensize, ninp, padding_idx =0)
+        print('sizes of encoder ', tokensize, ninp )
+        self.decoder = nn.Linear(nhid, tokensize)
         self.init_weights()
     def forward(self, input, hidden):
         input = torch.tensor(input)
@@ -109,8 +126,6 @@ class CharEncoder(nn.Module):
     def init_weights(self):
         initrange = 0.1
         self.encoder.weight.data.uniform_(-initrange, initrange)
-        self.decoder.bias.data.fill_(0)
-        self.decoder.weight.data.uniform_(-initrange, initrange)
 
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
@@ -160,10 +175,12 @@ class CharGenerator(nn.Module):
         """
         if torch.cuda.is_available():
             input = input.cuda()
-        input = self.encoder(input)
+        emb = self.drop(self.encoder(input))
         #hidden_lstm = hidden_lstm[1].squeeze()
-        input_cat = torch.cat((input, hidden_lstm), 0) # needs to be right dim 
-        input_cat = torch.unsqueeze(input_cat, 0).unsqueeze(0)
+        #hidden_lstm = hidden_lstm.repeat()
+        #print('in generator emb and hidden', emb.shape, hidden_lstm.shape)
+        hidden_lstm = torch.cat([hidden_lstm]*emb.shape[1]).reshape(emb.shape[0], emb.shape[1],-1)
+        input_cat = torch.cat((emb, hidden_lstm), 2) # hidden_lstm need to be inserted for each word 
         input_cat = self.drop(input_cat)
         output, hidden = self.rnn(input_cat, hidden)
         output = self.drop(output)

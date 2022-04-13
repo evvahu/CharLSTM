@@ -13,21 +13,22 @@ from itertools import zip_longest
 from data import Corpus
 
 class Data(Dataset):
-    def __init__(self, words, chars, nchars, seq_len):
+    def __init__(self, words, chars,targets,  nchars, seq_len):
         self.nchars = nchars
         self.seq_len = seq_len
-        self.data_words, self.data_chars = self.batchify(words, chars)
+        self.data_words, self.data_chars, self.data_target = self.batchify(words, chars, targets)
         
-    def batchify(self, data_words, data_chars):
+    def batchify(self, data_words, data_chars, data_target):
         nseqs = data_words.size(0) // self.seq_len # floor division
 
         data_words = data_words.narrow(0,0,nseqs*self.seq_len)
         data_chars = data_chars.narrow(0,0, nseqs*self.seq_len)
-        
+        data_target = data_target.narrow(0,0, nseqs*self.seq_len)
         data_words = data_words.reshape(nseqs, self.seq_len)
         data_chars = data_chars.reshape(nseqs, self.seq_len*self.nchars)
+        data_target = data_target.reshape(nseqs, self.seq_len*self.nchars) 
         #assert data_words.shape[0] ==  int(data_chars.shape[0]/12), print('wrong batchifying')
-        return data_words, data_chars
+        return data_words, data_chars, data_target
 
     def __len__(self):
         'Denotes the total number of samples'
@@ -36,7 +37,7 @@ class Data(Dataset):
     def __getitem__(self, index):
         'Generates one sample of data'
         # Select sample
-        return {'words': self.data_words[index], 'chars': self.data_chars[index]}
+        return {'words': self.data_words[index], 'chars': self.data_chars[index], 'target':self.data_target[index]}
 
 
 if __name__ == '__main__':
