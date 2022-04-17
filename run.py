@@ -42,6 +42,9 @@ def evaluate(data):
             loss = 0
             for i, pred in enumerate(output):
                 t = data_target[:,i,:].long()
+                if torch.cuda.is_available():
+                    t = t.cuda()
+                
                 #print('p shape t shape', pred.shape, t.shape) # pred have to be of shape bs x nclasses x seq_len
                 loss+= criterion(pred, t)
             loss = loss/len(output)
@@ -49,6 +52,8 @@ def evaluate(data):
             hidden_state = repackage_hidden(hidden_state)
             hidden_generator = repackage_hidden(hidden_generator)
     return np.mean(losses)
+
+
 def train(data):
     """
     method to train model and generator
@@ -73,6 +78,8 @@ def train(data):
         loss = 0
         for i, pred in enumerate(output):
             t = data_target[:,i,:].long()
+            if torch.cuda.is_available():
+                t = t.cuda()
             #print('p shape t shape', pred.shape, t.shape) # pred have to be of shape bs x nclasses x seq_len
             loss+= criterion(pred, t)
         loss = loss/len(output)
@@ -99,18 +106,21 @@ if __name__ == '__main__':
     try:
         os.makedirs(config['model_dir'])
     except:
-        print('dict already exists')
+        print('model directory already exists')
     model_path_lstm = os.path.join(config['model_dir'], 'lstmmain')
     model_path_generator = os.path.join(config['model_dir'], 'generator')
     logging.info('model paths: {}, {}'.format(model_path_generator, model_path_lstm))
     logging.info('start loading corpus')
-    corpus = Corpus(config['path'], config['word_length'], config['seq_len'], cpu_count=mp.cpu_count())
-
+    logging.info('cpu count:{}'.format(mp.cpu_count()))
+    print('cpu count', mp.cpu_count)
+    #corpus = Corpus(config['path'], config['word_length'], config['seq_len'], cpu_count=mp.cpu_count())
+    corpus = Corpus(config['path'], config['word_length'], config['seq_len'], parallel=False)
+    logging.info('finished loading corpus')
     data_loader_train = DataLoader(Data(corpus.train_words, corpus.train_chars, corpus.train_targets, config['word_length'], config['seq_len']), batch_size=config['bs'])
     data_loader_valid = DataLoader(Data(corpus.valid_words, corpus.valid_chars,corpus.valid_targets, config['word_length'], config['seq_len']), batch_size=config['bs'])
     data_loader_test = DataLoader(Data(corpus.test_words, corpus.test_chars, corpus.test_targets, config['word_length'], config['seq_len']), batch_size=config['bs'])
     # corpus = Corpus(config['path'], config['word_length'], config['seq_len'], cpu_count=2)
-    print('finished with loading corpus')
+    logging.info('finished with data loader')
     seq_len = config['seq_len']
     l_r = config['l_r']
     word_length = config['word_length']
@@ -141,6 +151,7 @@ if __name__ == '__main__':
 
     eow = int(corpus.dictionary.char2idx['<eow>'])
     #print(eow)
+    logging.info('start train')
     try:
         best_val_loss = None
         for epoch in range(1, epochs+1):

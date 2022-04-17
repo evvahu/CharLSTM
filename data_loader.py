@@ -39,14 +39,33 @@ class Data(Dataset):
         # Select sample
         return {'words': self.data_words[index], 'chars': self.data_chars[index], 'target':self.data_target[index]}
 
+def show_matrix_with_chars(matr, dictio):
+    chars = []
+    for i in matr:
+        chars.append(dictio[int(i)])
+    print(chars)
 
 if __name__ == '__main__':
     path = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_dummy'
     #path = '/Users/eva/Documents/Work/experiments/Agent_first_project/CharLSTMLM/testfiles'
     seq_len = 15
     nchars = 12
-    corp = Corpus(path, nchars,seq_len)
-    
+    corpus = Corpus(path, nchars,seq_len)
+    data = DataLoader(Data(corpus.train_words,corpus.train_chars,corpus.train_targets,nchars, seq_len), batch_size=20)
+    #for batch_ndx, sample in enumerate(data):
+        # get batch for word and character data
+    sample = next(iter(data))
+    data_word = sample['words']
+    data_char = sample['chars'][:,nchars:] # has to be next word
+    show_matrix_with_chars(data_char[0], corpus.dictionary.idx2char)
+    data_char = data_char.reshape(-1, (seq_len-1), nchars) # @TODO check!!!!!!
+    for i in range(data_char.shape[1]-1):
+        show_matrix_with_chars(data_char[0][i], corpus.dictionary.idx2char) 
+    print(data_char.shape)
+    data_target = sample['target'][:, nchars:]
+    data_target = data_target.reshape(-1, (seq_len-1), nchars) # @TODO check!!!!!!
+    show_matrix_with_chars(data_target[0][0], corpus.dictionary.idx2char)
+    """
     print(corp.train_words.shape, corp.train_chars.shape)
     ex_words = corp.train_words[:seq_len].tolist()
     ex_chars = corp.train_chars[0].tolist()
@@ -68,3 +87,5 @@ if __name__ == '__main__':
     char_list = [corp.dictionary.idx2char[int(id)] for id in ex_chars]
     print(word_list)
     print(char_list) 
+
+    """

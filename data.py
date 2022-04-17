@@ -97,7 +97,7 @@ class Dictionary(object):
 
 
 class Corpus(object):
-    def __init__(self, path, word_max_l, seq_l, cpu_count=None):
+    def __init__(self, path, word_max_l, seq_l, parallel=False, cpu_count=None):
         self.max_l = word_max_l
         self.seq_l = seq_l
         if not cpu_count:
@@ -105,9 +105,15 @@ class Corpus(object):
         else:
             self.cpu_count = cpu_count
         self.dictionary = Dictionary(path)
-        self.train_words, self.train_chars, self.train_targets = self.tokenize(os.path.join(path, 'train.txt'))
-        self.valid_words, self.valid_chars, self.valid_targets = self.tokenize(os.path.join(path, 'valid.txt'))
-        self.test_words, self.test_chars, self.test_targets = self.tokenize(os.path.join(path, 'test.txt'))
+        if parallel:
+            self.train_words, self.train_chars, self.train_targets = self.tokenize(os.path.join(path, 'train.txt'))
+            self.valid_words, self.valid_chars, self.valid_targets = self.tokenize(os.path.join(path, 'valid.txt'))
+            self.test_words, self.test_chars, self.test_targets = self.tokenize(os.path.join(path, 'test.txt'))
+        else:
+            self.train_words, self.train_chars, self.train_targets = self.tokenize_not_parallel(os.path.join(path, 'train.txt'))
+            self.valid_words, self.valid_chars, self.valid_targets = self.tokenize_not_parallel(os.path.join(path, 'valid.txt'))
+            self.test_words, self.test_chars, self.test_targets = self.tokenize_not_parallel(os.path.join(path, 'test.txt'))
+
 
     def _grouper(self, n, iterable, padvalue=None):
         return zip_longest(*[iter(iterable)]*n, fillvalue=padvalue)
@@ -132,15 +138,15 @@ class Corpus(object):
                 w = w[:(self.max_l-2)]
             for c in w: 
                 if c in self.dictionary.char2idx:
-                    char_tens[c_local] = self.dictionary.char2idx[c]
-                    char_tens_t[c_local+1] = self.dictionary.char2idx[c]
+                    char_tens[c_local+1] = self.dictionary.char2idx[c]
+                    char_tens_t[c_local] = self.dictionary.char2idx[c]
                 else:
-                    char_tens[c_local] = self.dictionary.char2idx['<unk>']
-                    char_tens_t[c_local+1] = self.dictionary.char2idx['<unk>']
+                    char_tens[c_local+1] = self.dictionary.char2idx['<unk>']
+                    char_tens_t[c_local] = self.dictionary.char2idx['<unk>']
                 c_local +=1 
 
-            char_tens[c_local] = self.dictionary.char2idx['<eow>']
-            char_tens_t[0] = self.dictionary.char2idx['<bow>']
+            char_tens[0] = self.dictionary.char2idx['<bow>']
+            char_tens_t[c_local] = self.dictionary.char2idx['<eow>']
 
             ids_chars[i:, ] = char_tens
             ids_chars_target[i:,] = char_tens_t
@@ -157,17 +163,67 @@ class Corpus(object):
         words = torch.zeros(0)
         chars = torch.zeros(0)
         target = torch.zeros(0)
-        for chunk in self._grouper(10, reader):
-            res = pool.map(self.parallel_tokenize, chunk)
 
+        for i, chunk in enumerate(self._grouper(1000, reader)):
+            print('chunk:{}'.format(i))
+            res = pool.map(self.parallel_tokenize, chunk)
             for tup in res:
                 words = torch.cat((words, tup[0].float()))
                 chars = torch.cat((chars, tup[1]))
-                target = torch.cat((chars, tup[2]))
+                target = torch.cat((target, tup[2]))
         pool.close()
         return words, chars, target
+    def tokenize_not_parallel(self,path):
+        with open(path, 'r', encoding="utf8") as f:
+            ntokens = 0
+            nchars = 0
+            nlines = 0
+            for line in f:
+                words = line.split()
+                ntokens += len(words)
+                nlines +=1
 
+        print('nlines: {}'.format(nlines))
+        ids = torch.zeros(ntokens, dtype=torch.long)
+        ids_chars = torch.zeros((ntokens, self.max_l))
+        ids_chars_target = torch.zeros((ntokens, self.max_l))
+        with open(path, 'r') as rf:
+            for l in tqdm(rf, total=nlines):
+                #print(l)
+                words = l.strip().split()
+                for i, w in enumerate(words):
+                    #print(w)
+                    if w in self.dictionary.word2idx:
+                        ids[i] = self.dictionary.word2idx[w]
+                    else:
+                        ids[i] = self.dictionary.word2idx["<unk>"] 
+                    #char_tens = torch.zeros(self.max_l)
+                    #char_tens_t = torch.zeros(self.max_l)
+                    c_local = 0
+                    too_long = False
+                    if len(w) > (self.max_l-2):
+                        w = w[:(self.max_l-2)]
+                    for c in w: 
+                        if c in self.dictionary.char2idx:
+                            ids_chars[i][c_local+1] = self.dictionary.char2idx[c]
+                            ids_chars_target[i][c_local] = self.dictionary.char2idx[c] 
+                            #char_tens[c_local+1] = self.dictionary.char2idx[c]
+                            #char_tens_t[c_local] = self.dictionary.char2idx[c]
+                        else:          
+                            ids_chars[i][c_local+1] = self.dictionary.char2idx['<unk>']
+                            ids_chars_target[i][c_local] = self.dictionary.char2idx['<unk>'] 
+                            #char_tens[c_local+1] = self.dictionary.char2idx['<unk>']
+                            #char_tens_t[c_local] = self.dictionary.char2idx['<unk>']
+                        c_local +=1 
+
+                    ids_chars[i][0] = self.dictionary.char2idx['<bow>']
+                    ids_chars[i][c_local] = self.dictionary.char2idx['<eow>']
+
+                    #ids_chars[i:, ] = char_tens
+                    #ids_chars_target[i:,] = char_tens_t
+        print(ids.shape, ids_chars.shape)
+        return ids, ids_chars, ids_chars_target
 if __name__ == '__main__':
-    path = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_dummy'
+    path = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short'
     #path = '/Users/eva/Documents/Work/experiments/Agent_first_project/CharLSTMLM/testfiles'
-    corp = Corpus(path, 12, 15, 1)
+    corp = Corpus(path, 12, 15, parallel=False)

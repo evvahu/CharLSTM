@@ -10,7 +10,7 @@ bs = 128
 seq_len = 15
 word_length = 10
 
-l_r = 0.1
+l_r = 0.001
 
 [wordmodel]
 embedding_size = 300
