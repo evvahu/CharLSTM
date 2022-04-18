@@ -133,7 +133,6 @@ class Corpus(object):
             char_tens = torch.zeros(self.max_l)
             char_tens_t = torch.zeros(self.max_l)
             c_local = 0
-            too_long = False
             if len(w) > (self.max_l-2):
                 w = w[:(self.max_l-2)]
             for c in w: 
@@ -226,4 +225,4 @@ class Corpus(object):
 if __name__ == '__main__':
     path = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short'
     #path = '/Users/eva/Documents/Work/experiments/Agent_first_project/CharLSTMLM/testfiles'
-    corp = Corpus(path, 12, 15, parallel=False)
+    corp = Corpus(path, 12, 15, parallel=True)
