@@ -8,12 +8,8 @@
 import data
 import torch
 import numpy as np
-<<<<<<< HEAD
-def batchify(data_words, data_chars, bsz):#, cuda):
-=======
 
 def batchify(data_words, data_chars, bsz, cuda):
->>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
     # Work out how cleanly we can divide the dataset into bsz parts.
     
     nbatch = data_words.size(0) // bsz
@@ -24,13 +20,6 @@ def batchify(data_words, data_chars, bsz, cuda):
     # Evenly divide the data across the bsz batches.
     data_words = data_words.view(bsz, -1).t().contiguous()
     data_chars = data_chars.view(bsz, -1).t().contiguous()
-<<<<<<< HEAD
-    #if cuda:
-    #    data_words = data_words.cuda()
-    #    data_chars = data_chars.cuda()
-=======
-
->>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
     return data_words, data_chars
 
 def repackage_hidden(h):

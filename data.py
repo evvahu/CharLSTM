@@ -100,10 +100,10 @@ class Corpus(object):
     def __init__(self, path, word_max_l):
         self.dictionary = Dictionary(path)
         print('finished')
-        self.train_words, self.train_chars = tokenize(self.dictionary, os.path.join(path, 'train.txt'), word_max_l)
+        self.train_words, self.train_chars, self.train_targets = tokenize(self.dictionary, os.path.join(path, 'train.txt'), word_max_l)
         print('finished loading train')
-        self.valid_words, self.valid_chars = tokenize(self.dictionary, os.path.join(path, 'valid.txt'), word_max_l)
-        self.test_words, self.test_chars = tokenize(self.dictionary, os.path.join(path, 'test.txt'), word_max_l)
+        self.valid_words, self.valid_chars, self.valid_targets = tokenize(self.dictionary, os.path.join(path, 'valid.txt'), word_max_l)
+        self.test_words, self.test_chars, self.test_targets = tokenize(self.dictionary, os.path.join(path, 'test.txt'), word_max_l)
         print('finished tokenising all data files')
 
 
@@ -123,6 +123,7 @@ def tokenize(dictionary, path, max_l):
     with open(path, 'r', encoding="utf8") as f:
         ids = torch.LongTensor(ntokens)
         ids_chars = torch.LongTensor(ntokens, max_l)
+        ids_chars_target = torch.LongTensor(ntokens, max_l)
         token = 0
         for line in tqdm(f, total=nr_lines):
         #for line in f:
@@ -130,31 +131,34 @@ def tokenize(dictionary, path, max_l):
             if not line: continue
             words = line.split()
             for word in words:
+                print(word)
                 if word in dictionary.word2idx:
                     ids[token] = dictionary.word2idx[word]
                 else:
                     ids[token] = dictionary.word2idx["<unk>"]
                 
                 char_tens = torch.zeros(max_l, dtype=int)
+                char_tens_t = torch.zeros(max_l, dtype=int)
                 c_local = 0
-                too_long = False
+                if len(word) > (max_l-2):
+                    word = word[:(max_l-2)]
                 for c in word: 
                     if c in dictionary.char2idx:
                         char_tens[c_local] = dictionary.char2idx[c]
+                        char_tens_t[c_local+1] = dictionary.char2idx[c]
                     else:
                         char_tens[c_local] = dictionary.char2idx['<unk>']
+                        char_tens_t[c_local+1] = dictionary.char2idx['<unk>']
                     c_local +=1 
-                    if c_local == (max_l-1):
-                        char_tens[c_local] = dictionary.char2idx['<eow>']
-                        too_long = True
-                        break
-                if not too_long:
-                    char_tens[c_local] = dictionary.char2idx['<eow>']
+
+                char_tens[c_local] = dictionary.char2idx['<eow>']
+                char_tens_t[0] = dictionary.char2idx['<bow>']
                 #ids_chars = torch.cat((ids_chars, char_tens))
                 ids_chars[token,:] = char_tens
+                ids_chars_target[token, :] = char_tens_t
                 token += 1
-    return ids, ids_chars
+    return ids, ids_chars, ids_chars_target
 
 if __name__ == '__main__':
-    path = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_dummy'
+    path = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short'
     corp = Corpus(path, 12)

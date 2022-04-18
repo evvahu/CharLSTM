@@ -12,16 +12,10 @@ class Encoder(nn.Module):
         self.rnn_type = rnn_type
         self.encoder = nn.Embedding(ntoken, ninp)
         
-<<<<<<< HEAD
-        self.charEncoder = CharEncoder(*params_char)
-
-        rnn_dim = ninp + params_char[1]
-=======
         #self.charEncoder = CharEncoder(*params_char)
 
         #rnn_dim = ninp + params_char[1]
         rnn_dim = ninp
->>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
         if rnn_type in ['LSTM', 'GRU']:
             self.rnn = getattr(nn, rnn_type)(rnn_dim, nhid, nlayers, batch_first=False, dropout=dropout)
         else:
@@ -30,42 +24,15 @@ class Encoder(nn.Module):
             except KeyError:
                 raise ValueError( """An invalid option for `--model` was supplied,
                                  options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
-<<<<<<< HEAD
-            self.rnn = nn.RNN(rnn_dim, nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
-          
-        self.decoder = nn.Linear(nhid, ntoken)
-=======
             self.rnn = nn.RNN(rnn_dim, nhid, nlayers, nonlinearity=nonlinearity, batch_first=False, dropout=dropout)
           
         #self.decoder = nn.Linear(nhid, ntoken)
         self.decoder = CharGenerator(*params_char)
->>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
         self.init_weights()
         self.nhid = nhid
         self.nlayers = nlayers
 
-<<<<<<< HEAD
     def forward(self, word_input, char_input, rnn_hidden, hidden_char, device):
-        #print('CHAR', char_input.shape, char_hidden.shape)
-        if torch.cuda.is_available():
-            word_input = word_input.cuda() #to(device)
-            char_input = char_input.cuda() #.to(device)
-        print('word device char device', word_input.get_device(), char_input.get_device())
-        #hidden_char.to(device)
-        _, hidden_char = self.charEncoder(char_input, hidden_char, device) # take last hidden state of character LSTM 
-        
-        emb_word = self.encoder(word_input)
-        #emb_word = torch.flatten(emb_word, )
-        #print('SHAPE', emb_word.shape, hidden_char[0].view(emb_word.shape[0], -1).shape)
-        emb_concat = self.drop(torch.cat((emb_word, hidden_char[0].view(emb_word.shape[0],-1)), 1)) # hidden_char[0] is hidden state (1 is cell state)
-        emb_concat = torch.unsqueeze(emb_concat, 0)
-        #print('rnn hidden', rnn_hidden.shape)
-        output, hidden = self.rnn(emb_concat, rnn_hidden)
-        output = self.drop(output)
-        decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
-        return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden, hidden_char
-=======
-    def forward(self, word_input, char_input, rnn_hidden, hidden_char):
    
         if torch.cuda.is_available():
             word_input = word_input.cuda() #to(device)
@@ -97,7 +64,6 @@ class Encoder(nn.Module):
         
         #return decoded.view(output.size(0), output.size(1), decoded.size(1)), hidden, hidden_char
         return outputs, hidden, hidden_char #torch.stack(hs_main), torch.stack(hs_chars)
->>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
 
     def init_weights(self):
         initrange = 0.1
@@ -114,22 +80,12 @@ class Encoder(nn.Module):
         else:
             return weight.new(self.nlayers, bsz, self.nhid).zero_()
 
-<<<<<<< HEAD
-=======
 
 
->>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
 class CharEncoder(nn.Module):
 
     def __init__(self, tokensize, ninp, nhid, dropout, nlayers=1, rnn_type='LSTM'):
         super(CharEncoder, self).__init__()
-<<<<<<< HEAD
-        self.encoder = nn.Embedding(tokensize, ninp, padding_idx =0)
-        print('sizes of encoder ', tokensize, ninp )
-        self.decoder = nn.Linear(nhid, tokensize)
-=======
-
->>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
         self.rnn_type = rnn_type
         self.nlayers = nlayers
         self.nhid = nhid
@@ -137,11 +93,7 @@ class CharEncoder(nn.Module):
 
         if rnn_type in ['LSTM', 'GRU']:
             print('RNN TYPE', rnn_type)
-<<<<<<< HEAD
-            self.rnn = getattr(nn, rnn_type)(ninp, nhid, nlayers, dropout=dropout)
-=======
             self.rnn = getattr(nn, rnn_type)(ninp, nhid, nlayers,batch_first=True, dropout=dropout)
->>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
         else:
             print('wrong type')
             #try:
@@ -150,19 +102,6 @@ class CharEncoder(nn.Module):
             #    raise ValueError( """An invalid option for `--model` was supplied,
             #                     options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
             #self.rnn = nn.RNN(ninp, nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
-<<<<<<< HEAD
-        self.init_weights()
-    def forward(self, input, hidden, device):
-        #input = torch.tensor(input)
-        #input.to(device)
-        print('devicy:', device, input.shape)
-        if torch.cuda.is_available():
-            input = input.cuda()#to(device)
-            self.encoder = self.encoder.cuda() #to(device)
-        print('input shape', input.shape)
-        emb = self.encoder(input)
-        print('emb shape', emb.shape)
-=======
         self.encoder = nn.Embedding(tokensize, ninp, padding_idx =0)
         print('sizes of encoder ', tokensize, ninp )
         self.decoder = nn.Linear(nhid, tokensize)
@@ -175,7 +114,6 @@ class CharEncoder(nn.Module):
             self.encoder = self.encoder.cuda() #to(device)
         #print('input shape', input.shape)
         emb = self.drop(self.encoder(input))
->>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
         #emb = self.drop(emb)
         #print('emb and hidden shape', emb.shape, hidden.shape)
         output, hidden = self.rnn(emb, hidden)
@@ -283,7 +221,7 @@ class CharGenerator(nn.Module):
         self.drop = nn.Dropout(dropout)
         #self.softmax = nn.Softmax(dim=1)
         self.init_weights()
-    def forward(self, input, hidden_lstm, hidden, device):
+    def forward(self, input, hidden_lstm, hidden):
         """
         last_char: index of previously predicted character
         output: trained to predict the next char 
@@ -307,7 +245,12 @@ class CharGenerator(nn.Module):
         #output = self.softmax(output)
         return output, hidden
 
-<<<<<<< HEAD
+    def init_weights(self):
+        initrange = 0.1
+        self.encoder.weight.data.uniform_(-initrange, initrange)
+        self.decoder.bias.data.fill_(0)
+        self.decoder.weight.data.uniform_(-initrange, initrange)
+    
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
         if self.rnn_type == 'LSTM':
@@ -315,12 +258,3 @@ class CharGenerator(nn.Module):
                     weight.new(self.nlayers, bsz, self.nhid).zero_())
         else:
             return weight.new(self.nlayers, bsz, self.nhid).zero_()
-
-
-=======
->>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
-    def init_weights(self):
-        initrange = 0.1
-        self.encoder.weight.data.uniform_(-initrange, initrange)
-        self.decoder.bias.data.fill_(0)
-        self.decoder.weight.data.uniform_(-initrange, initrange)
