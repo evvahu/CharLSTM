@@ -1,15 +1,26 @@
+
 import argparse
 from data import Corpus, Dictionary
+<<<<<<< HEAD
 from utilsy import batchify, get_batch, get_char_input, repackage_hidden, get_char_batch, MyDataParallel
+=======
+from data_loader import Data
+from utilsy import batchify, get_batch, get_char_input, repackage_hidden, get_char_batch
+>>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
 from models import Encoder, CharGenerator
 import torch
+from torch.utils.data import DataLoader
 import numpy as np
 import multiprocessing as mp
 import logging
 import time 
 import toml 
 import os 
+import matplotlib.pyplot as plt
+import numpy as np
+import math
 
+<<<<<<< HEAD
 argp = argparse.ArgumentParser()
 
 # load config with hyperparameters, paths etc..
@@ -83,12 +94,32 @@ def evaluate(data_w, data_c):
         device = 'cuda:{}'.format(device)
     else:
         device = 'cpu'
+=======
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+def evaluate(data):
+    pass
+
+
+def evaluate(data):
+    model.eval()
+    #losses = []
+    total_loss = 0
+>>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
     with torch.no_grad():
-        for batch, i in enumerate(range(0, data_w.size(0) - 1, seq_len)):
-            data_word, target_word = get_batch(data_w, i, seq_len) # data word : sentence length x batch size
-            data_char, target_char, end_char_i = get_char_batch(data_c, end_char_i, seq_len, config['word_length'])
-            #data_char = get_char_input(data_word, corpus.dictionary,device,eow, word_length) # data char (each word in one column): max word length x (seq_len*batchsize) 
+        hidden_state = model.init_hidden(config['bs'])
+        hidden_generator = model.decoder.init_hidden(config['word_length']) # only one word at a time 
+        for batch_ndx, sample in enumerate(data):
+            # get batch for word and character data
+            data_word = sample['words']
+            if data_word.shape[0] < config['bs']:
+                continue
+            data_char = sample['chars'][:,config['word_length']:] # has to be next word
+            data_char = data_char.reshape(config['bs'], (config['seq_len']-1), config['word_length']) # @TODO check!!!!!!
+            data_target = sample['target'][:, config['word_length']:]
+            data_target = data_target.reshape(config['bs'], (config['seq_len']-1), config['word_length']) # @TODO check!!!!!!
             model.zero_grad()
+<<<<<<< HEAD
             #initialise hidden states, hidden_state tuple of hidden state and cell sttate 
             hidden_state = model.init_hidden(config['bs'])
             hidden_char = model.charEncoder.init_hidden(config['bs'])
@@ -113,9 +144,23 @@ def evaluate(data_w, data_c):
             seq_loss = (seq_loss*data_word.shape[0])/data_word.shape[1]
             avg_seq_loss.append(seq_loss.item())
             
+=======
+            output, hidden_state, hidden_generator = model(data_word, data_char, hidden_state, hidden_generator)
+            loss = 0
+            for i, pred in enumerate(output):
+                t = data_target[:,i,:].long()
+                if torch.cuda.is_available():
+                    t = t.cuda()
+                
+                #print('p shape t shape', pred.shape, t.shape) # pred have to be of shape bs x nclasses x seq_len
+                loss+= torch.nn.CrossEntropyLoss()(pred, t)
+            total_loss += loss
+            #loss = loss/len(output)
+            #losses.append(loss.item())
+>>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
             hidden_state = repackage_hidden(hidden_state)
-            hidden_char = repackage_hidden(hidden_char)
             hidden_generator = repackage_hidden(hidden_generator)
+<<<<<<< HEAD
         
     return np.mean(avg_seq_loss), np.mean(avg_prob)
 
@@ -190,11 +235,18 @@ def generate_word(hidden_state, hidden_generator, target, last_idx, word_l, devi
     return word_loss/i, probs_of_word, word_str
 
 def train(data_w, data_c):
+=======
+    return total_loss/ (len(data) -1)#np.mean(losses)
+
+
+def train(data):
+>>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
     """
     method to train model and generator
     data_w: train data, word level
     data_c: train data, char level  
     """
+<<<<<<< HEAD
     
     end_char_i = 0
     for batch, i in enumerate(range(0, data_w.size(0) - 1, seq_len)):
@@ -241,41 +293,127 @@ def train(data_w, data_c):
         seq_loss = (seq_loss*data_word.shape[0])/data_word.shape[1]
         print('batch {}, loss {}'.format(batch, seq_loss))
         seq_loss.backward()
+=======
+    model.train()
+
+    hidden_state = model.init_hidden(config['bs'])
+    hidden_generator = model.decoder.init_hidden(config['word_length']) # only one word at a time 
+    for batch_ndx, sample in enumerate(data):
+        # get batch for word and character data
+        data_word = sample['words']
+        if data_word.shape[0] < config['bs']:
+            continue
+        data_char = sample['chars'][:,config['word_length']:] # has to be next word
+        data_char = data_char.reshape(-1, (config['seq_len']-1), config['word_length']) # @TODO check!!!!!!
+        data_target = sample['target'][:, config['word_length']:]
+        data_target = data_target.reshape(-1, (config['seq_len']-1), config['word_length']) # @TODO check!!!!!!
+        model.zero_grad()
+        output, hidden_state, hidden_generator = model(data_word, data_char, hidden_state, hidden_generator)
+        loss = 0
+        for i, pred in enumerate(output):
+            t = data_target[:,i,:].long()
+            if torch.cuda.is_available():
+                t = t.cuda()
+            #print('p shape t shape', pred.shape, t.shape) # pred have to be of shape bs x nclasses x seq_len
+            loss+= criterion(pred, t)
+        loss = loss/len(output)
+       # print('batch nr: {}, loss:{}'.format(batch_ndx, loss))
+        loss.backward()
+>>>>>>> 5cc600c80047837401fb8dff4fcddcea48b48efc
         optimizer.step()
         hidden_state = repackage_hidden(hidden_state)
-        hidden_char = repackage_hidden(hidden_char)
         hidden_generator = repackage_hidden(hidden_generator)
+        
 
 
-try:
-    best_val_loss = None
-    for epoch in range(1, epochs+1):
-        epoch_start_time = time.time()
-        train(train_w, train_c)
-        val_loss, probs = evaluate(val_w, val_c)
+
+
+
+if __name__ == '__main__':
+    argp = argparse.ArgumentParser()
+    argp.add_argument('config_path')
+    args = argp.parse_args()
+    config = toml.load(args.config_path)
+    print(config)
+    logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(),
+                                                    logging.FileHandler(config['log_path'])])
+    logging.info(config)
+    try:
+        os.makedirs(config['model_dir'])
+    except:
+        print('model directory already exists')
+    model_path_lstm = os.path.join(config['model_dir'], 'lstmmain')
+    model_path_generator = os.path.join(config['model_dir'], 'generator')
+    logging.info('model paths: {}, {}'.format(model_path_generator, model_path_lstm))
+    logging.info('start loading corpus')
+    logging.info('cpu count:{}'.format(mp.cpu_count()))
+    print('cpu count', mp.cpu_count)
+    #corpus = Corpus(config['path'], config['word_length'], config['seq_len'], cpu_count=mp.cpu_count())
+    corpus = Corpus(config['path'], config['word_length'], config['seq_len'], parallel=False)
+    logging.info('finished loading corpus')
+    data_loader_train = DataLoader(Data(corpus.train_words, corpus.train_chars, corpus.train_targets, config['word_length'], config['seq_len']), batch_size=config['bs'])
+    data_loader_valid = DataLoader(Data(corpus.valid_words, corpus.valid_chars,corpus.valid_targets, config['word_length'], config['seq_len']), batch_size=config['bs'])
+    data_loader_test = DataLoader(Data(corpus.test_words, corpus.test_chars, corpus.test_targets, config['word_length'], config['seq_len']), batch_size=config['bs'])
+    # corpus = Corpus(config['path'], config['word_length'], config['seq_len'], cpu_count=2)
+    logging.info('finished with data loader')
+    seq_len = config['seq_len']
+    l_r = config['l_r']
+    word_length = config['word_length']
+    
+    
+    gpu = False
+    if torch.cuda.is_available():
+        gpu = True
+   # params_char = [len(corpus.dictionary.idx2char), config['charmodel']['embedding_size'],  config['charmodel']['hidden_size'], config['charmodel']['dropout'], config['charmodel']['nlayers'], 'LSTM'] #(self, tokensize, ninp, nhid, dropout, nlayers=1, rnn_type='LSTM'):
+    params_char = [config['wordmodel']['hidden_size'], config['charmodel']['embedding_size'], len(corpus.dictionary.idx2char), config['charmodel']['hidden_size'],config['charmodel']['nlayers'], config['charmodel']['dropout'], 0, 'LSTM']  
+    #self, hl_size, emb_size, nchar, nhid, nlayers, dropout,padding_id=0, rnn_type = 'LSTM'): 
+    
+    # initialise models
+
+    model = Encoder(config['wordmodel']['dropout'], config['wordmodel']['embedding_size'], config['wordmodel']['hidden_size'], config['wordmodel']['nlayers'], len(corpus.dictionary.idx2word),params_char )
+    #generator = CharGenerator(config['wordmodel']['hidden_size'], config['generator']['embedding_size'],len(corpus.dictionary.idx2char),  config['generator']['hidden_size'], config['generator']['nlayers'], config['generator']['dropout'])
+    #generator = CharGenerator(config['wordmodel']['hidden_size'], config['generator']['embedding_size'],len(corpus.dictionary.idx2char),  config['generator']['hidden_size'], config['generator']['nlayers'], config['generator']['dropout'])
+
+    if gpu:
+        model.cuda()
+
+    softmax = torch.nn.Softmax(dim=1)
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr = l_r)
+    lr = config['l_r']
+    eval_batch_size = config['bs']
+    epochs = config['nr_epochs']
+
+    eow = int(corpus.dictionary.char2idx['<eow>'])
+    #print(eow)
+    logging.info('start train')
+    try:
+        best_val_loss = None
+        for epoch in range(1, epochs+1):
+            epoch_start_time = time.time()
+            train(data_loader_train)
+            val_loss = evaluate(data_loader_valid)
+            logging.info('-' * 89)
+            logging.info('after epoch {}: validation loss: {}, perplexity: {},  time: {:5.2f}s'.format(epoch, val_loss, math.exp(val_loss), time.time() - epoch_start_time))
+            logging.info('-' * 89)
+            #print('VAL LOSS', val_loss)
+            if not best_val_loss or val_loss < best_val_loss:
+                with open(model_path_lstm, 'wb') as f:
+                    torch.save(model, f)
+                    best_val_loss = val_loss
+            else:
+                logging.info('after epoch {}, no improvement lr {} will be reduced'.format(epoch, str(lr)))
+                lr /= 4.0
+    except KeyboardInterrupt:
         logging.info('-' * 89)
-        logging.info('after epoch {}: average word probability: {}, validation loss: {}, time: {:5.2f}s'.format(epoch, np.mean(probs), val_loss, time.time() - epoch_start_time))
-        logging.info('-' * 89)
-        #print('VAL LOSS', val_loss)
-        if not best_val_loss or val_loss < best_val_loss:
-            with open(model_path_lstm, 'wb') as f:
-                torch.save(model, f)
-                best_val_loss = val_loss
-            with open(model_path_generator, 'wb') as f:
-                torch.save(generator, f)
-        else:
-            logging.info('after epoch {}, no improvement lr {} will be reduced'.format(epoch, str(lr)))
-            lr /= 4.0
-except KeyboardInterrupt:
-    logging.info('-' * 89)
-    logging.info('Exiting from training early')
-# Load the best saved model.
-with open(model_path_lstm, 'rb') as f:
-    model = torch.load(f)
-with open(model_path_generator, 'rb') as f:
-    generator = torch.load(f)
-# Run on test data.
-test_loss, probs = evaluate(test_w, test_c)
-logging.info('*' * 89)
-logging.info('End of training: average word probability: {}, validation loss: {}'.format(np.mean(probs), val_loss))
-logging.info('*' * 89)
+        logging.info('Exiting from training early')
+        # Load the best saved model.
+        with open(model_path_lstm, 'rb') as f:
+            model = torch.load(f)
+        with open(model_path_generator, 'rb') as f:
+            generator = torch.load(f)
+    # Run on test data.
+    test_loss = evaluate(data_loader_test)
+    logging.info('*' * 89)
+    logging.info('End of training: average word probability: {}, test loss: {}'.format(0, test_loss))
+    logging.info('*' * 89)

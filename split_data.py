@@ -52,11 +52,11 @@ def create_vocab(path, vocab_size, lower=False):
                 counter[word.lower()] += 1
             else:
                 counter[word] +=1
-
-    count_pairs = sorted(counter.items(), key=lambda x: (-x[1], x[0]))[:vocab_size]
-    words = [w for (w, v) in count_pairs]
-    print(len(count_pairs))
-    print(len(counter), count_pairs[vocab_size - 1])
+    if vocab_size > 0:
+        count_pairs = sorted(counter.items(), key=lambda x: (-x[1], x[0]))[:vocab_size]
+        words = [w for (w, v) in count_pairs]
+    else:
+        words = [w for (w,v) in counter.items()]
     w2idx = dict(zip(words, range(len(words))))
     idx2w = dict(zip(range(len(words)), words))
     return w2idx, idx2w
@@ -74,8 +74,6 @@ def create_char_vocab(path, vocab_size, lower=False):
 
     count_pairs = sorted(counter.items(), key=lambda x: (-x[1], x[0]))[:vocab_size]
     words = [w for (w, v) in count_pairs]
-    print(len(count_pairs))
-    print(len(counter), count_pairs[vocab_size - 1])
     ch2idx = dict(zip(words, range(len(words))))
     idx2ch = dict(zip(range(len(words)), words))
     return ch2idx, idx2ch
@@ -87,14 +85,18 @@ def convert_text(input_path, output_path, vocab):
             output.write(" ".join(words) + "\n")
         output.close()
 
-def convert_line(line, vocab, oov = False, lower=True):
+def convert_line(line, w_vocab, oov = False, lower=True):
     if oov:
-        return [filter_word(word, vocab, lower) for word in line.replace("\n", " <eos>").split()]
+        if lower:
+            return [filter_word(word, w_vocab).lower() for word in line.replace("\n", " <eos>").split()]
+        else:
+            return [filter_word(word, w_vocab) for word in line.replace("\n", " <eos>").split()]
+
     else:
         if lower:
-            return[word.lower() for word in line.replace("\n", "<eos>").split()]
+            return[word.lower() for word in line.replace("\n", " <eos>").split()]
         else:
-            return[word for word in line.replace("\n", "<eos>").split()]
+            return[word for word in line.replace("\n", " <eos>").split()]
 
 def word_to_idx(word, vocab, lower):
     if lower:
@@ -110,7 +112,7 @@ def filter_word(word, vocab):
     else:
         return "<unk>"
 
-def create_corpus(input_path, output_path, vocab=dict(), oov=False):
+def create_corpus(input_path, output_path, w_vocab, oov=False, lower=True):
     """ Split data to create training, validation and test corpus """
     nlines = 0
     f_train = open(output_path + "/train.txt", 'w')
@@ -121,11 +123,11 @@ def create_corpus(input_path, output_path, vocab=dict(), oov=False):
 
     for line in read_file(input_path):
         if nlines % 10 == 0:
-            f_valid.write(" ".join(convert_line(line, vocab, oov)) + "\n")
+            f_valid.write(" ".join(convert_line(line, w_vocab, oov, lower)) + "\n")
         elif nlines % 10 == 1:
-            f_test.write(" ".join(convert_line(line, vocab, oov)) + "\n")
+            f_test.write(" ".join(convert_line(line,  w_vocab,  oov, lower)) + "\n")
         else:
-            train.append(" ".join(convert_line(line, vocab, oov)) + "\n")
+            train.append(" ".join(convert_line(line, w_vocab,oov, lower)) + "\n")
         nlines += 1
 
     shuffle(train)
@@ -134,7 +136,15 @@ def create_corpus(input_path, output_path, vocab=dict(), oov=False):
     f_train.close()
     f_valid.close()
     f_test.close()
-
+def read_vocab(path):
+    toidx = dict()
+    fromidx = []
+    with open(path, 'r') as rf:
+        for i,l in enumerate(rf):
+            l = l.strip()
+            toidx[l] = i
+            fromidx.append(l)
+    return toidx, fromidx
 if __name__ == '__main__':
     input = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki/wiki_short'
     vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short/vocab.txt'
@@ -142,18 +152,23 @@ if __name__ == '__main__':
     output = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short/output.txt'
     output_dir = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short'
     oov = False
-    
-    ch2idx, idx2ch = create_char_vocab(input, 50, lower=True) # 26, 10, 4, 5
-    with open (char_vocab, 'w') as wf:
-        for k,v in ch2idx.items():
-            wf.write('{}\n'.format(k)) 
+    do_vocab = False
+    if do_vocab: 
+        ch2idx, idx2ch = create_char_vocab(input, 50, lower=True) # 26, 10, 4, 5
+        with open (char_vocab, 'w') as wf:
+            for k,v in ch2idx.items():
+                wf.write('{}\n'.format(k)) 
+        print('finished char vocab')
+        w2idx, idx2w = create_vocab(input, 50000, lower=True)
+        with open (vocab, 'w') as wf:
+            for k,v in w2idx.items():
+                wf.write('{}\n'.format(k))
+        print('finished word vocab')
+    else:
+        w2idx, idx2w = read_vocab(vocab)
+        #char2idx, idx2char = read_vocab(char_vocab)
 
-    w2idx, idx2w = create_vocab(input, 500, lower=True)
-    with open (vocab, 'w') as wf:
-        for k,v in w2idx.items():
-            wf.write('{}\n'.format(k))
-    
-    create_corpus(input, output_dir, oov=False)
+    create_corpus(input, output_dir, w2idx, oov=True)
     #if oov:
     #    w2idx, idx2w = create_vocab(input, 50000)
     #    convert_text(input, output, w2idx)
