@@ -6,11 +6,11 @@ path = '/home/cluster/evhuber/data/wiki_no_unk_short'
 model_dir = 'try_run/models'
 log_path = 'try_run/logger'
 nr_epochs = 10
-bs = 128
+bs = 34
 seq_len = 15
-word_length = 10
+word_length = 8
 
-l_r = 0.001
+l_r = 0.0001
 
 [wordmodel]
 embedding_size = 300

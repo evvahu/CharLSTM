@@ -14,7 +14,7 @@ import toml
 import os 
 import matplotlib.pyplot as plt
 import numpy as np
-
+import math
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -24,7 +24,8 @@ def evaluate(data):
 
 def evaluate(data):
     model.eval()
-    losses = []
+    #losses = []
+    total_loss = 0
     with torch.no_grad():
         hidden_state = model.init_hidden(config['bs'])
         hidden_generator = model.decoder.init_hidden(config['word_length']) # only one word at a time 
@@ -46,12 +47,13 @@ def evaluate(data):
                     t = t.cuda()
                 
                 #print('p shape t shape', pred.shape, t.shape) # pred have to be of shape bs x nclasses x seq_len
-                loss+= criterion(pred, t)
-            loss = loss/len(output)
-            losses.append(loss.item())
+                loss+= torch.nn.CrossEntropyLoss()(pred, t)
+            total_loss += loss
+            #loss = loss/len(output)
+            #losses.append(loss.item())
             hidden_state = repackage_hidden(hidden_state)
             hidden_generator = repackage_hidden(hidden_generator)
-    return np.mean(losses)
+    return total_loss/ (len(data) -1)#np.mean(losses)
 
 
 def train(data):
@@ -83,7 +85,7 @@ def train(data):
             #print('p shape t shape', pred.shape, t.shape) # pred have to be of shape bs x nclasses x seq_len
             loss+= criterion(pred, t)
         loss = loss/len(output)
-        #print('batch nr: {}, loss:{}'.format(batch_ndx, loss))
+       # print('batch nr: {}, loss:{}'.format(batch_ndx, loss))
         loss.backward()
         optimizer.step()
         hidden_state = repackage_hidden(hidden_state)
@@ -159,7 +161,7 @@ if __name__ == '__main__':
             train(data_loader_train)
             val_loss = evaluate(data_loader_valid)
             logging.info('-' * 89)
-            logging.info('after epoch {}: validation loss: {}, time: {:5.2f}s'.format(epoch, val_loss, time.time() - epoch_start_time))
+            logging.info('after epoch {}: validation loss: {}, perplexity: {},  time: {:5.2f}s'.format(epoch, val_loss, math.exp(val_loss), time.time() - epoch_start_time))
             logging.info('-' * 89)
             #print('VAL LOSS', val_loss)
             if not best_val_loss or val_loss < best_val_loss:
