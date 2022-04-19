@@ -15,14 +15,13 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import math
-
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+from utilsy import MyDataParallel
 
 def evaluate(data):
     pass
 
 
-def evaluate(data):
+def evaluate(data, model):
     model.eval()
     #losses = []
     total_loss = 0
@@ -30,16 +29,22 @@ def evaluate(data):
         hidden_state = model.init_hidden(config['bs'])
         hidden_generator = model.decoder.init_hidden(config['word_length']) # only one word at a time 
         for batch_ndx, sample in enumerate(data):
+            if torch.cuda.is_available():
+                current_device = 'cuda:{}'.format(torch.cuda.current_device())
+            else:
+                current_device = 'cpu'
+            model = model.to(current_device)
             # get batch for word and character data
             data_word = sample['words']
             if data_word.shape[0] < config['bs']:
                 continue
+            
             data_char = sample['chars'][:,config['word_length']:] # has to be next word
             data_char = data_char.reshape(config['bs'], (config['seq_len']-1), config['word_length']) # @TODO check!!!!!!
             data_target = sample['target'][:, config['word_length']:]
             data_target = data_target.reshape(config['bs'], (config['seq_len']-1), config['word_length']) # @TODO check!!!!!!
             model.zero_grad()
-            output, hidden_state, hidden_generator = model(data_word, data_char, hidden_state, hidden_generator)
+            output, hidden_state, hidden_generator = model(data_word, data_char, hidden_state, hidden_generator, current_device)
             loss = 0
             for i, pred in enumerate(output):
                 t = data_target[:,i,:].long()
@@ -56,7 +61,7 @@ def evaluate(data):
     return total_loss/ (len(data) -1)#np.mean(losses)
 
 
-def train(data):
+def train(data, model):
     """
     method to train model and generator
     data_w: train data, word level
@@ -65,18 +70,25 @@ def train(data):
     model.train()
 
     hidden_state = model.init_hidden(config['bs'])
-    hidden_generator = model.decoder.init_hidden(config['word_length']) # only one word at a time 
+    hidden_generator = model.decoder.init_hidden(config['word_length']) # only one word at a time
+    outputs = [] 
     for batch_ndx, sample in enumerate(data):
         # get batch for word and character data
+        if torch.cuda.is_available():
+            current_device = 'cuda:{}'.format(torch.cuda.current_device())
+        else:
+            current_device = 'cpu'
         data_word = sample['words']
         if data_word.shape[0] < config['bs']:
             continue
+        #model = model.to(current_device)
         data_char = sample['chars'][:,config['word_length']:] # has to be next word
-        data_char = data_char.reshape(-1, (config['seq_len']-1), config['word_length']) # @TODO check!!!!!!
+        data_char = data_char.reshape(-1, (config['seq_len']-1), config['word_length']) 
         data_target = sample['target'][:, config['word_length']:]
-        data_target = data_target.reshape(-1, (config['seq_len']-1), config['word_length']) # @TODO check!!!!!!
+        data_target = data_target.reshape(-1, (config['seq_len']-1), config['word_length']) 
         model.zero_grad()
-        output, hidden_state, hidden_generator = model(data_word, data_char, hidden_state, hidden_generator)
+        print('batch idx: {}, data shape: {}, char shape: {}'.format(batch_ndx, data_word.shape, data_char.shape))
+        output, hidden_state, hidden_generator = model(data_word, data_char, hidden_state, hidden_generator, current_device)
         loss = 0
         for i, pred in enumerate(output):
             t = data_target[:,i,:].long()
@@ -85,7 +97,7 @@ def train(data):
             #print('p shape t shape', pred.shape, t.shape) # pred have to be of shape bs x nclasses x seq_len
             loss+= criterion(pred, t)
         loss = loss/len(output)
-       # print('batch nr: {}, loss:{}'.format(batch_ndx, loss))
+        print('batch nr: {}, loss:{}'.format(batch_ndx, loss))
         loss.backward()
         optimizer.step()
         hidden_state = repackage_hidden(hidden_state)
@@ -141,9 +153,9 @@ if __name__ == '__main__':
     #generator = CharGenerator(config['wordmodel']['hidden_size'], config['generator']['embedding_size'],len(corpus.dictionary.idx2char),  config['generator']['hidden_size'], config['generator']['nlayers'], config['generator']['dropout'])
     #generator = CharGenerator(config['wordmodel']['hidden_size'], config['generator']['embedding_size'],len(corpus.dictionary.idx2char),  config['generator']['hidden_size'], config['generator']['nlayers'], config['generator']['dropout'])
 
-    if gpu:
-        model.cuda()
-
+    if torch.cuda.device_count() > 1:
+        model = MyDataParallel(model)
+        #model = model.cuda()
     softmax = torch.nn.Softmax(dim=1)
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr = l_r)
@@ -154,12 +166,14 @@ if __name__ == '__main__':
     eow = int(corpus.dictionary.char2idx['<eow>'])
     #print(eow)
     logging.info('start train')
+
+
     try:
         best_val_loss = None
         for epoch in range(1, epochs+1):
             epoch_start_time = time.time()
-            train(data_loader_train)
-            val_loss = evaluate(data_loader_valid)
+            train(data_loader_train, model)
+            val_loss = evaluate(data_loader_valid, model)
             logging.info('-' * 89)
             logging.info('after epoch {}: validation loss: {}, perplexity: {},  time: {:5.2f}s'.format(epoch, val_loss, math.exp(val_loss), time.time() - epoch_start_time))
             logging.info('-' * 89)
@@ -180,7 +194,7 @@ if __name__ == '__main__':
         with open(model_path_generator, 'rb') as f:
             generator = torch.load(f)
     # Run on test data.
-    test_loss = evaluate(data_loader_test)
+    test_loss = evaluate(data_loader_test, model)
     logging.info('*' * 89)
     logging.info('End of training: average word probability: {}, test loss: {}'.format(0, test_loss))
     logging.info('*' * 89)

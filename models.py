@@ -32,20 +32,30 @@ class Encoder(nn.Module):
         self.nhid = nhid
         self.nlayers = nlayers
 
-    def forward(self, word_input, char_input, rnn_hidden, hidden_char):
-   
-        if torch.cuda.is_available():
-            word_input = word_input.cuda() #to(device)
-            char_input = char_input.cuda() #.to(device)
-
+    def forward(self, word_input, char_input, rnn_hidden, hidden_char, device):
+        device2 = 'cuda:{}'.format(torch.cuda.current_device())
+        print('current device: {}, {}'.format(device, device2))
+        #self.encoder = self.encoder.to(device)
+        #self.rnn = self.rnn.to(device)
+        #self.decoder = self.decoder.to(device)
+        device = torch.device(device)
+        word_input = word_input.to(device)
+        char_input = char_input.to(device)
+        rnn_hidden = [rnn_hidden[0].to(device), rnn_hidden[1].to(device)]
+        hidden_char = [hidden_char[0].to(device), hidden_char[1].to(device)]
+        #rnn_hidden = rnn_hidden.to(device)
+        #hidden_char = hidden_char.to(device)
+        print('device:', word_input.get_device(), char_input.get_device())
+        print('in forward size: {}'.format(word_input.shape))
         #hidden_char.to(device)
         #_, hidden_char = self.charEncoder(char_input, hidden_char) # take last hidden state of character LSTM 
         hs_main = []
         hs_chars = []
         outputs = []
+        #self.encoder.to(device)
         for id in range(word_input.shape[1]-1):
             #print('in forward', word_input[:,id].shape)
-            emb_word = self.encoder(word_input[:,id].long()).unsqueeze(0)
+            emb_word = self.encoder(word_input[:,id]).unsqueeze(0)
             #emb_word = torch.flatten(emb_word, )
             #hidden_char[0].view(emb_word.shape[0],-1)), 1 OOOOLD
 
@@ -53,8 +63,12 @@ class Encoder(nn.Module):
             #emb_concat = self.drop(torch.cat((emb_word, hidden_char_ref), 1)) # hidden_char[0] is hidden state (1 is cell state)
             #emb_concat = emb_concat.unsqueeze(0)#.unsqueeze(0) 
             #output, hidden = self.rnn(emb_concat, rnn_hidden)
-            output, hidden = self.rnn(emb_word, rnn_hidden)
-            current_char = char_input[:,id, :].long() 
+           # print('emb word shape: {}'.format(emb_word.shape))
+            #output, hidden = self.rnn(emb_word, rnn_hidden)
+            output, hidden = self.rnn(emb_word)
+            current_char = char_input[:,id, :].long()
+            #output_decoder, hidden_char = self.decoder(current_char, hidden[0][1].squeeze()) #char input has to be n+1
+ 
             output_decoder, hidden_char = self.decoder(current_char, hidden[0][1].squeeze(), hidden_char) #char input has to be n+1
             outputs.append(output_decoder.view(output_decoder.shape[0], output_decoder.shape[2], -1))
             #hs_main.append(hidden)
@@ -104,7 +118,6 @@ class CharEncoder(nn.Module):
             #                     options are ['LSTM', 'GRU', 'RNN_TANH' or 'RNN_RELU']""")
             #self.rnn = nn.RNN(ninp, nhid, nlayers, nonlinearity=nonlinearity, dropout=dropout)
         self.encoder = nn.Embedding(tokensize, ninp, padding_idx =0)
-        print('sizes of encoder ', tokensize, ninp )
         self.decoder = nn.Linear(nhid, tokensize)
         self.init_weights()
     def forward(self, input, hidden):

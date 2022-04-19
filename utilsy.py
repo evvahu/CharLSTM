@@ -79,3 +79,9 @@ def get_char_input(input, dictionary, device, eow, max_l=10):
     return char_mat
 
 
+class MyDataParallel(torch.nn.DataParallel):
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.module, name)
