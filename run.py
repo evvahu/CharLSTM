@@ -15,6 +15,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 import math
+import pickle 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -85,7 +86,7 @@ def train(data):
             #print('p shape t shape', pred.shape, t.shape) # pred have to be of shape bs x nclasses x seq_len
             loss+= criterion(pred, t)
         loss = loss/len(output)
-       # print('batch nr: {}, loss:{}'.format(batch_ndx, loss))
+        logging.info('batch nr: {}, loss:{}'.format(batch_ndx, loss))
         loss.backward()
         optimizer.step()
         hidden_state = repackage_hidden(hidden_state)
@@ -101,7 +102,6 @@ if __name__ == '__main__':
     argp.add_argument('config_path')
     args = argp.parse_args()
     config = toml.load(args.config_path)
-    print(config)
     logging.basicConfig(level=logging.INFO, handlers=[logging.StreamHandler(),
                                                     logging.FileHandler(config['log_path'])])
     logging.info(config)
@@ -109,14 +109,21 @@ if __name__ == '__main__':
         os.makedirs(config['model_dir'])
     except:
         print('model directory already exists')
-    model_path_lstm = os.path.join(config['model_dir'], 'lstmmain')
-    model_path_generator = os.path.join(config['model_dir'], 'generator')
-    logging.info('model paths: {}, {}'.format(model_path_generator, model_path_lstm))
+    model_path = os.path.join(config['model_dir'], 'lstmmain')
+
+    logging.info('model path: {}'.format(model_path))
     logging.info('start loading corpus')
-    logging.info('cpu count:{}'.format(mp.cpu_count()))
-    print('cpu count', mp.cpu_count)
-    #corpus = Corpus(config['path'], config['word_length'], config['seq_len'], cpu_count=mp.cpu_count())
-    corpus = Corpus(config['path'], config['word_length'], config['seq_len'], parallel=False)
+
+    if config['pickled']:
+        reader = open(config['path'], 'rb')
+        corpus = pickle.load(reader)
+        reader.close()
+    else:
+        if config['parallel']:
+            logging.info('cpu count:{}'.format(mp.cpu_count()))
+            corpus = Corpus(config['path'], config['word_length'], config['seq_len'], cpu_count=mp.cpu_count())
+        else:
+            corpus = Corpus(config['path'], config['word_length'], config['seq_len'], parallel=False, cpu_count = 0)
     logging.info('finished loading corpus')
     data_loader_train = DataLoader(Data(corpus.train_words, corpus.train_chars, corpus.train_targets, config['word_length'], config['seq_len']), batch_size=config['bs'])
     data_loader_valid = DataLoader(Data(corpus.valid_words, corpus.valid_chars,corpus.valid_targets, config['word_length'], config['seq_len']), batch_size=config['bs'])
@@ -165,7 +172,7 @@ if __name__ == '__main__':
             logging.info('-' * 89)
             #print('VAL LOSS', val_loss)
             if not best_val_loss or val_loss < best_val_loss:
-                with open(model_path_lstm, 'wb') as f:
+                with open(model_path, 'wb') as f:
                     torch.save(model, f)
                     best_val_loss = val_loss
             else:
@@ -175,10 +182,9 @@ if __name__ == '__main__':
         logging.info('-' * 89)
         logging.info('Exiting from training early')
         # Load the best saved model.
-        with open(model_path_lstm, 'rb') as f:
+        with open(model_path, 'rb') as f:
             model = torch.load(f)
-        with open(model_path_generator, 'rb') as f:
-            generator = torch.load(f)
+
     # Run on test data.
     test_loss = evaluate(data_loader_test)
     logging.info('*' * 89)
