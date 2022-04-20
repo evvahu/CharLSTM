@@ -88,7 +88,7 @@ def convert_text(input_path, output_path, vocab):
 def convert_line(line, w_vocab, oov = False, lower=True):
     if oov:
         if lower:
-            return [filter_word(word, w_vocab).lower() for word in line.replace("\n", " <eos>").split()]
+            return [filter_word(word.lower(), w_vocab).lower() for word in line.replace("\n", " <eos>").split()]
         else:
             return [filter_word(word, w_vocab) for word in line.replace("\n", " <eos>").split()]
 
@@ -146,13 +146,13 @@ def read_vocab(path):
             fromidx.append(l)
     return toidx, fromidx
 if __name__ == '__main__':
-    input = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki/wiki_short'
-    vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short/vocab.txt'
-    char_vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short/char_vocab.txt'
-    output = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short/output.txt'
-    output_dir = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short'
+    input = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki/wiki_small'
+    vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_splits_small/vocab.txt'
+    char_vocab = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_splits_small/char_vocab.txt'
+    output = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_splits_small/output.txt'
+    output_dir = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_splits_small'
     oov = False
-    do_vocab = False
+    do_vocab = True
     if do_vocab: 
         ch2idx, idx2ch = create_char_vocab(input, 50, lower=True) # 26, 10, 4, 5
         with open (char_vocab, 'w') as wf:

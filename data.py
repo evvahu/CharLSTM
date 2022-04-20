@@ -19,7 +19,19 @@ import multiprocessing as mp
 from itertools import zip_longest
 from multiprocessing import Pool
 from itertools import repeat
-import math 
+import math
+import logging 
+from concurrent import futures
+from collections import deque
+import itertools
+import pickle
+def count_iter_items(iterable):
+    """
+    Consume an iterable not reading it into memory; return the number of items.
+    """
+    counter = itertools.count()
+    deque(zip(iterable, counter), maxlen=0)  # (consume at C speed)
+    return next(counter)
 
 class Dictionary(object):
     def __init__(self, path):
@@ -98,6 +110,7 @@ class Dictionary(object):
 
 class Corpus(object):
     def __init__(self, path, word_max_l, seq_l, parallel=False, cpu_count=None):
+
         self.max_l = word_max_l
         self.seq_l = seq_l
         if not cpu_count:
@@ -120,11 +133,15 @@ class Corpus(object):
 
 
     def parallel_tokenize(self, chunk):
-        words = chunk.split()
+        #words = chunk.split()
+        words = []
+        for sent in chunk:
+            words = words + sent.split()
         ntokens = len(words)
         ids = torch.zeros(ntokens, dtype=torch.long)
         ids_chars = torch.zeros((ntokens, self.max_l))
         ids_chars_target = torch.zeros((ntokens, self.max_l))
+        
         for i, w in enumerate(words):
             if w in self.dictionary.word2idx:
                 ids[i] = self.dictionary.word2idx[w]
@@ -156,21 +173,49 @@ class Corpus(object):
         """Tokenizes a text file for training or testing to a sequence of indices format
         We assume that training and test data has <eos> symbols """
         assert os.path.exists(path)
+        print('in tokenize method')
         # Tokenize file content
         reader = open(path, 'r', encoding="utf8")
-        pool = mp.Pool(self.cpu_count)
-        words = torch.zeros(0)
-        chars = torch.zeros(0)
-        target = torch.zeros(0)
-
-        for i, chunk in enumerate(self._grouper(1000, reader)):
-            print('chunk:{}'.format(i))
-            res = pool.map(self.parallel_tokenize, chunk)
-            for tup in res:
-                words = torch.cat((words, tup[0].float()))
-                chars = torch.cat((chars, tup[1]))
-                target = torch.cat((target, tup[2]))
-        pool.close()
+        reader_consume = open(path, 'r', encoding='utf8')
+        #pool = mp.Pool(self.cpu_count)
+        e = futures.ThreadPoolExecutor(max_workers=self.cpu_count)
+        #words = torch.zeros(0)
+        #chars = torch.zeros(0)
+        #target = torch.zeros(0)
+        words = []
+        chars = []
+        target = []
+        logging.info('pool of {} cpus'.format(self.cpu_count))
+        logging.info('start tokenising')
+        #nr = len(list(self._grouper(100, reader)))
+        size = 1000
+        nr = count_iter_items(self._grouper(size, reader_consume))
+        print('nr: {}', nr)
+        for i, chunk in enumerate(self._grouper(size, reader)):
+            #logging.info('chunk:{}/{}'.format(i, nr))
+            print('chunk:{}/{}'.format(i, nr))
+            #res = pool.map(self.parallel_tokenize, chunk)
+            #print(chunk[0])
+            res = e.submit(self.parallel_tokenize, chunk)
+            words.append(res.result()[0])
+            chars.append(res.result()[1])
+            target.append(res.result()[2])
+            #words = torch.cat((words, res.result()[0].float()))
+            #chars = torch.cat((chars, res.result()[1]))
+            #target = torch.cat((target, res.result()[2]))
+            #for tup in res:#.result():
+            #    words.append(tup[0])
+            #    chars.append(tup[1])
+            #    target.append(tup[2])
+            #    words = torch.cat((words, tup[0].float()))
+            #    chars = torch.cat((chars, tup[1]))
+            #    target = torch.cat((target, tup[2]))
+        #pool.close()
+        e.shutdown()
+        words = torch.cat(words)
+        chars = torch.cat(chars)
+        target = torch.cat(target)
+        print('result shape', words.shape, chars.shape, target.shape)
         return words, chars, target
     def tokenize_not_parallel(self,path):
         with open(path, 'r', encoding="utf8") as f:
@@ -223,6 +268,17 @@ class Corpus(object):
         print(ids.shape, ids_chars.shape)
         return ids, ids_chars, ids_chars_target
 if __name__ == '__main__':
-    path = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_no_unk_short'
+    path = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_splits_small'
     #path = '/Users/eva/Documents/Work/experiments/Agent_first_project/CharLSTMLM/testfiles'
-    corp = Corpus(path, 12, 15, parallel=True)
+
+    wl = 12
+    sl = 15
+    #corp = Corpus(path, wl, sl, parallel=True)
+    path = '/Users/eva/Documents/Work/experiments/Agent_first_project/Surprisal_LMs/data/GERMAN/wiki_short_object.pickle'
+    #f = open(path, 'wb')
+    #pickle.dump(corp, f)
+    #f.close()
+    f = open(path, 'rb')
+    corpus = pickle.load(f)
+    print(corpus.train_words[0:sl,])
+    f.close()
